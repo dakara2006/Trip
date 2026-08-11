@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>BeTravel - 나의 여행 일정</title>
+<title>여행 경로판</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -29,7 +30,7 @@
   input,select,button,textarea{font-family:inherit;font-size:14px;}
   button{cursor:pointer;}
 
-  /* Header */
+  /* ===== Header / departure board ===== */
   .board{
     background:var(--ink);
     color:#F5F3EC;
@@ -89,10 +90,10 @@
     letter-spacing:.05em;
   }
 
-  /* Layout */
+  /* ===== Layout ===== */
   .layout{display:flex;flex:1;min-height:0;}
   .sidebar{
-    width:400px;
+    width:380px;
     flex-shrink:0;
     display:flex;
     flex-direction:column;
@@ -134,7 +135,7 @@
 
   .panel-scroll{flex:1;overflow-y:auto;padding:14px;}
 
-  /* Form */
+  /* ===== Form ===== */
   .add-form{
     background:var(--card);
     border:1px solid var(--line);
@@ -171,7 +172,6 @@
     border:1px solid var(--line);
     background:#fff;
     color:var(--ink-soft);
-    cursor: pointer;
   }
   .chip:hover{border-color:var(--ink);}
   .search-results{
@@ -216,7 +216,7 @@
   .add-btn:hover{background:#0e1620;}
   .add-btn:disabled{background:var(--line);color:var(--ink-soft);cursor:not-allowed;}
 
-  /* Timeline */
+  /* ===== Timeline (signature element) ===== */
   .day-group{margin-bottom:22px;}
   .day-heading{
     display:flex;
@@ -275,13 +275,12 @@
   }
   .stop-remove:hover{background:var(--paper-dim);color:var(--red);}
   .transit-note{
-    display:flex;align-items:center;justify-content:space-between;
+    display:flex;align-items:center;gap:6px;
     font-family:'IBM Plex Mono',monospace;
     font-size:11.5px;
     padding:6px 2px 10px 2px;
     color:var(--ink-soft);
   }
-  .transit-info{display:flex;align-items:center;gap:6px;}
   .mode-badge{
     font-size:10.5px;
     font-weight:600;
@@ -293,14 +292,6 @@
   .mode-badge.mode-bus{background:var(--bus);}
   .mode-badge.mode-walk{background:var(--walk);}
   .mode-badge.mode-car{background:var(--car);}
-  .map-link-btn{
-    font-size:11px;
-    color:#3498db;
-    text-decoration:none;
-    font-weight: 500;
-  }
-  .map-link-btn:hover{text-decoration:underline;}
-
   .empty-state{
     text-align:center;
     color:var(--ink-soft);
@@ -310,6 +301,7 @@
     border-radius:10px;
   }
 
+  /* ===== recent trips ===== */
   .recent{margin-top:8px;}
   .recent h4{font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px;}
   .recent-item{
@@ -320,7 +312,7 @@
   .recent-item button{border:none;background:var(--paper-dim);padding:4px 8px;border-radius:5px;font-size:11px;color:var(--ink);}
   .recent-code{font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);}
 
-  /* Map legend */
+  /* ===== Map legend ===== */
   .legend{
     position:absolute;
     right:12px;bottom:12px;
@@ -338,7 +330,31 @@
   .legend-swatch.mode-walk{background:repeating-linear-gradient(to right,var(--walk) 0 4px,transparent 4px 8px);}
   .legend-swatch.mode-car{background:repeating-linear-gradient(to right,var(--car) 0 6px,transparent 6px 10px);}
 
-  /* Modal */
+  .leaflet-div-icon{background:transparent;border:none;}
+  .trip-marker{
+    width:26px;height:26px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;
+    border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);
+  }
+  .preview-marker{
+    width:22px;height:22px;border-radius:50% 50% 50% 0;
+    background:var(--red);
+    border:2px solid #fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.4);
+    transform:rotate(-45deg);
+  }
+  .preview-marker::after{
+    content:'';
+    position:absolute;
+    top:50%;left:50%;
+    width:6px;height:6px;
+    background:#fff;
+    border-radius:50%;
+    transform:translate(-50%,-50%) rotate(45deg);
+  }
+
+  /* ===== Modal ===== */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(24,36,48,.55);
     display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;
@@ -382,8 +398,8 @@
 <body>
 
 <header class="board">
-  <div class="board-badge">BeTravel</div>
-  <input id="tripTitle" class="trip-title-input" value="어르신 맞춤형 여행 일정" />
+  <div class="board-badge">TRIP</div>
+  <input id="tripTitle" class="trip-title-input" value="나의 여행" />
   <span id="viewTag" class="view-tag" style="display:none;">보기 모드</span>
   <div class="board-actions">
     <button class="btn" id="loadOpenBtn">코드로 불러오기</button>
@@ -395,13 +411,11 @@
   <aside class="sidebar">
     <div class="day-tabs" id="dayTabs"></div>
     <div class="panel-scroll">
-      
-      <!-- 1. 장소 추가 섹션 (머무는 시간 포함) -->
       <div class="add-form" id="addForm">
-        <h3>1단계: 장소 및 머무는 시간 설정</h3>
+        <h3>장소 추가 (카카오 API 검색)</h3>
         <div class="field" id="searchField">
-          <label>장소 명칭 검색 (카카오 API)</label>
-          <input type="text" id="placeSearch" placeholder="예: 경복궁, 서울역 등 검색" autocomplete="off" />
+          <label>장소 명칭 검색</label>
+          <input type="text" id="placeSearch" placeholder="예: 경복궁, 서울역, 맛집 등 입력" autocomplete="off" />
           <div class="search-results" id="searchResults" style="display:none;"></div>
           <div class="selected-place" id="selectedPlace" style="display:none;"></div>
         </div>
@@ -419,38 +433,36 @@
           </div>
         </div>
         <div class="field">
-          <label>머무는 시간 (분 단위)</label>
+          <label>머무는 시간 (분)</label>
           <input type="number" id="stopDuration" min="0" step="5" value="60" />
           <div class="chips" id="durationChips">
             <span class="chip" data-min="30">30분</span>
             <span class="chip" data-min="60">1시간</span>
             <span class="chip" data-min="90">1시간30분</span>
             <span class="chip" data-min="120">2시간</span>
+            <span class="chip" data-min="180">3시간</span>
           </div>
         </div>
-
-        <h3 style="margin-top:16px;">2단계: 다음 장소로의 이동 설정</h3>
         <div class="row2">
           <div class="field">
-            <label>이동 수단</label>
+            <label>다음 장소까지 이동수단</label>
             <select id="stopTransport">
-              <option value="subway">지하철 🚇</option>
-              <option value="bus">버스 🚌</option>
-              <option value="walk">도보 🚶</option>
-              <option value="car">자동차 🚗</option>
+              <option value="subway">지하철</option>
+              <option value="bus">버스</option>
+              <option value="walk">도보</option>
+              <option value="car">자동차</option>
             </select>
           </div>
           <div class="field">
-            <label>이동 소요 시간 (분)</label>
-            <input type="number" id="stopTransportMin" min="0" step="5" placeholder="예: 20" />
+            <label>이동 시간 (분, 선택)</label>
+            <input type="number" id="stopTransportMin" min="0" step="5" placeholder="예: 15" />
           </div>
         </div>
         <div class="field">
-          <label>이동 메모 (환승 정보 등)</label>
-          <input type="text" id="stopTransportNote" placeholder="예: 3호선 환승 후 도보 5분" />
+          <label>이동 메모 (선택, 예: 2호선 → 3호선 환승)</label>
+          <input type="text" id="stopTransportNote" placeholder="노선/환승 정보" />
         </div>
-
-        <button type="button" class="add-btn" id="addBtn" disabled>일정에 장소 추가하기</button>
+        <button type="button" class="add-btn" id="addBtn" disabled>장소 추가하기</button>
       </div>
 
       <div id="timeline"></div>
@@ -471,18 +483,19 @@
 
 <div id="modalRoot"></div>
 
-<!-- 카카오맵 API 스크립트 로드 (services 라이브러리 포함) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- 카카오 로컬 REST/지도 라이브러리 (JavaScript 키 사용) -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 <script>
 (function(){
   "use strict";
 
-  var MODE_LABEL = {subway:'지하철 🚇', bus:'버스 🚌', walk:'도보 🚶', car:'자동차 🚗'};
+  var MODE_LABEL = {subway:'지하철', bus:'버스', walk:'도보', car:'자동차'};
   var MODE_COLOR = {subway:'#2B6CB8', bus:'#2E8B57', walk:'#8B8577', car:'#C9822E'};
   var DAY_COLORS = ['#D6472F','#2B6CB8','#2E8B57','#C9822E','#7C5CBF','#B23A6D'];
 
   var state = {
-    title: '어르신 맞춤형 여행 일정',
+    title: '나의 여행',
     stops: [],
     activeDay: 'all',
     viewMode: false,
@@ -491,8 +504,9 @@
     tempMarker: null
   };
 
-  var map, ps, geocoder, markers = [], polylines = [];
+  var map, layerGroup, ps;
 
+  // ---------- utils ----------
   function uid(){ return Math.random().toString(36).slice(2,9); }
   function todayStr(){
     var d = new Date();
@@ -504,11 +518,11 @@
     return parts[1]+'월 '+parts[2]+'일';
   }
   function durLabel(min){
-    if(min==null || isNaN(min) || min<=0) return '';
+    if(min==null || isNaN(min)) return '';
     var h = Math.floor(min/60), m = min%60;
-    if(h && m) return h+'시간 '+m+'분 머무름';
-    if(h) return h+'시간 머무름';
-    return m+'분 머무름';
+    if(h && m) return h+'시간 '+m+'분';
+    if(h) return h+'시간';
+    return m+'분';
   }
   function sortedStops(){
     return state.stops.slice().sort(function(a,b){
@@ -517,45 +531,63 @@
     });
   }
   function groupByDay(list){
-    var mapObj={}, order=[];
+    var map={}, order=[];
     list.forEach(function(s){
       var key = s.date||'__nodate__';
-      if(!mapObj[key]){mapObj[key]=[]; order.push(key);}
-      mapObj[key].push(s);
+      if(!map[key]){map[key]=[]; order.push(key);}
+      map[key].push(s);
     });
     order.sort(function(a,b){ return a<b?-1:a>b?1:0; });
-    return order.map(function(k){ return {key:k, stops:mapObj[k]}; });
+    return order.map(function(k){ return {key:k, stops:map[k]}; });
   }
   function dayColor(idx){ return DAY_COLORS[idx % DAY_COLORS.length]; }
 
-  // ---------- 카카오맵 초기화 ----------
+  function previewIcon(){
+    return L.divIcon({
+      html: '<div class="preview-marker"></div>',
+      className: '',
+      iconSize: [22,22],
+      iconAnchor: [11,22]
+    });
+  }
+
+  function showPreviewMarker(lat, lng){
+    try{
+      if(state.tempMarker){ map.removeLayer(state.tempMarker); state.tempMarker = null; }
+      state.tempMarker = L.marker([lat,lng], {icon: previewIcon()}).addTo(map);
+      map.flyTo([lat,lng], Math.max(map.getZoom(), 15));
+    }catch(err){
+      console.error('preview marker failed', err);
+    }
+  }
+
+  // ---------- map ----------
   function initMap(){
-    var container = document.getElementById('map');
-    var options = {
-      center: new kakao.maps.LatLng(37.566826, 126.978656), // 서울시청 중심
-      level: 5
-    };
-    map = new kakao.maps.Map(container, options);
-    ps = new kakao.maps.services.Places();
-    geocoder = new kakao.maps.services.Geocoder();
+    map = L.map('map', {zoomControl:true}).setView([37.5665,126.9780], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19,
+      attribution:'&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    layerGroup = L.layerGroup().addTo(map);
 
-    // 지도 클릭 이벤트 (직접 위치 지정)
-    kakao.maps.event.addListener(map, 'click', function(mouseEvent){
+    // 카카오맵 SDK services 객체 초기화
+    if(typeof kakao !== 'undefined' && kakao.maps && kakao.maps.services){
+      ps = new kakao.maps.services.Places();
+    }
+
+    map.on('click', function(e){
       if(!state.pendingPick) return;
-      var latlng = mouseEvent.latLng;
-      var lat = latlng.getLat();
-      var lng = latlng.getLng();
-
+      var lat = e.latlng.lat, lng = e.latlng.lng;
       state.selectedPlace = {
         name: document.getElementById('placeSearch').value.trim() || '지도 지정 장소',
-        address: '위도: '+lat.toFixed(4)+', 경도: '+lng.toFixed(4),
+        address: '위도 '+lat.toFixed(5)+', 경도 '+lng.toFixed(5),
         lat: lat,
         lng: lng
       };
       hideResults();
       var sp = document.getElementById('selectedPlace');
       sp.style.display='block';
-      sp.textContent = '선택됨 (지도 지정): '+state.selectedPlace.address;
+      sp.textContent = '선택됨 (지도 클릭): '+state.selectedPlace.address;
       togglePicking(false);
       updateAddBtn();
       showPreviewMarker(lat, lng);
@@ -567,69 +599,211 @@
     var btn = document.getElementById('pickLocationBtn');
     var hint = document.getElementById('mapHint');
     if(on){
-      btn.textContent = '지도를 클릭하여 원하는 위치를 지정하세요';
+      btn.textContent = '지도를 클릭해 위치를 선택하세요';
       btn.classList.add('picking');
+      if(map) map.getContainer().style.cursor = 'crosshair';
       if(hint) hint.style.display = 'block';
     } else {
       btn.textContent = '목록에 없으면 지도를 클릭해 위치 지정';
       btn.classList.remove('picking');
+      if(map) map.getContainer().style.cursor = '';
       if(hint) hint.style.display = 'none';
     }
   }
 
-  function showPreviewMarker(lat, lng){
-    if(state.tempMarker){
-      state.tempMarker.setMap(null);
+  function renderMap(){
+    layerGroup.clearLayers();
+    var groups = groupByDay(sortedStops());
+    if(state.activeDay!=='all'){
+      groups = groups.filter(function(g){ return g.key===state.activeDay; });
     }
-    var coords = new kakao.maps.LatLng(lat, lng);
-    state.tempMarker = new kakao.maps.Marker({ position: coords });
-    state.tempMarker.setMap(map);
-    map.panTo(coords);
+    var bounds = [];
+    groups.forEach(function(g, gi){
+      var color = state.activeDay==='all' ? dayColor(gi) : dayColor(indexOfDayKey(g.key));
+      g.stops.forEach(function(s, i){
+        var icon = L.divIcon({
+          html:'<div class="trip-marker" style="background:'+color+'">'+(i+1)+'</div>',
+          className:'', iconSize:[26,26], iconAnchor:[13,13]
+        });
+        var m = L.marker([s.lat,s.lng], {icon:icon}).addTo(layerGroup);
+        m.bindPopup('<b>'+escapeHtml(s.name)+'</b><br>'+(s.time||'')+(s.date?(' · '+fmtDate(s.date)):''));
+        bounds.push([s.lat,s.lng]);
+        if(i < g.stops.length-1){
+          var next = g.stops[i+1];
+          var mode = s.transport || 'walk';
+          var style = {color:MODE_COLOR[mode], weight: mode==='subway'?5:4, opacity:.85};
+          if(mode==='walk') style.dashArray = '2,8';
+          if(mode==='car') style.dashArray = '10,6';
+          L.polyline([[s.lat,s.lng],[next.lat,next.lng]], style).addTo(layerGroup);
+        }
+      });
+    });
+    if(bounds.length){
+      map.fitBounds(bounds, {padding:[40,40], maxZoom:16});
+    }
+    renderLegend(groups);
+  }
+  function indexOfDayKey(key){
+    var order = groupByDay(sortedStops()).map(function(g){return g.key;});
+    return order.indexOf(key);
   }
 
-  // ---------- 카카오 장소 검색 API 연동 ----------
+  function renderLegend(groups){
+    var el = document.getElementById('legend');
+    var rows = ['subway','bus','walk','car'].map(function(m){
+      return '<div class="legend-row"><span class="legend-swatch mode-'+m+'" style="background:'+(m==='subway'||m==='bus'?MODE_COLOR[m]:'')+'"></span>'+MODE_LABEL[m]+'</div>';
+    }).join('');
+    var dayRows = '';
+    if(groups.length>1){
+      dayRows = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);">' +
+        groups.map(function(g,i){
+          var idx = state.activeDay==='all'? i : indexOfDayKey(g.key);
+          return '<div class="legend-row"><span class="day-dot" style="background:'+dayColor(idx)+'"></span>'+fmtDate(g.key==='__nodate__'?null:g.key)+'</div>';
+        }).join('') + '</div>';
+    }
+    el.innerHTML = rows + dayRows;
+    el.style.display = state.stops.length ? 'block' : 'none';
+  }
+
+  // ---------- timeline ----------
+  function renderDayTabs(){
+    var groups = groupByDay(sortedStops());
+    var el = document.getElementById('dayTabs');
+    if(groups.length<2){ el.innerHTML=''; return; }
+    var html = '<span class="day-tab'+(state.activeDay==='all'?' active':'')+'" data-day="all">전체</span>';
+    groups.forEach(function(g){
+      html += '<span class="day-tab'+(state.activeDay===g.key?' active':'')+'" data-day="'+g.key+'">'+fmtDate(g.key==='__nodate__'?null:g.key)+'</span>';
+    });
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll('.day-tab'), function(t){
+      t.addEventListener('click', function(){ state.activeDay=t.getAttribute('data-day'); renderAll(); });
+    });
+  }
+
+  function renderTimeline(){
+    var el = document.getElementById('timeline');
+    var groups = groupByDay(sortedStops());
+    if(state.activeDay!=='all') groups = groups.filter(function(g){return g.key===state.activeDay;});
+
+    if(!state.stops.length){
+      el.innerHTML = '<div class="empty-state">아직 추가된 장소가 없어요.<br>위에서 카카오 API로 장소를 검색해 일정을 만들어보세요.</div>';
+      return;
+    }
+
+    var html = '';
+    groups.forEach(function(g, gi){
+      var color = state.activeDay==='all' ? dayColor(gi) : dayColor(indexOfDayKey(g.key));
+      html += '<div class="day-group">';
+      html += '<div class="day-heading"><span class="day-dot" style="background:'+color+'"></span>'+fmtDate(g.key==='__nodate__'?null:g.key)+' · 정류장 '+g.stops.length+'곳</div>';
+      html += '<ul class="stop-list">';
+      g.stops.forEach(function(s, i){
+        var isLast = i===g.stops.length-1;
+        html += '<li class="stop-item">';
+        html += '<div class="stop-node" style="background:'+color+'">'+(i+1)+'</div>';
+        if(!isLast){
+          var mode = s.transport||'walk';
+          html += '<div class="stop-connector mode-'+mode+'"></div>';
+        }
+        html += '<div class="stop-card">';
+        html += '<div class="stop-top"><div><div class="stop-name">'+escapeHtml(s.name)+'</div><div class="stop-addr">'+escapeHtml(s.address||'')+'</div></div>';
+        html += '<div style="display:flex;align-items:flex-start;gap:4px;">';
+        html += '<div class="stop-time">'+(s.time||'--:--')+(s.duration?('<br>'+durLabel(s.duration)):'')+'</div>';
+        if(!state.viewMode) html += '<button class="stop-remove" data-remove="'+s.id+'" title="삭제">×</button>';
+        html += '</div></div>';
+        html += '</div>';
+        if(!isLast){
+          var mode2 = s.transport||'walk';
+          html += '<div class="transit-note"><span class="mode-badge mode-'+mode2+'">'+MODE_LABEL[mode2]+'</span>';
+          if(s.transportMin) html += '<span>'+s.transportMin+'분</span>';
+          if(s.transportNote) html += '<span>· '+escapeHtml(s.transportNote)+'</span>';
+          html += '</div>';
+        }
+        html += '</li>';
+      });
+      html += '</ul></div>';
+    });
+    el.innerHTML = html;
+
+    if(!state.viewMode){
+      Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function(btn){
+        btn.addEventListener('click', function(){
+          var id = btn.getAttribute('data-remove');
+          state.stops = state.stops.filter(function(s){ return s.id!==id; });
+          renderAll();
+        });
+      });
+    }
+  }
+
+  function escapeHtml(str){
+    return (str||'').replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function renderAll(){
+    renderDayTabs();
+    renderTimeline();
+    renderMap();
+    document.getElementById('tripTitle').value = state.title;
+  }
+
+  // ---------- Kakao Places Search API ----------
   var searchTimer = null;
   document.getElementById('placeSearch').addEventListener('input', function(e){
     var q = e.target.value.trim();
     state.selectedPlace = null;
     document.getElementById('selectedPlace').style.display='none';
     updateAddBtn();
-
+    
     if(searchTimer) clearTimeout(searchTimer);
     if(!q){ hideResults(); return; }
 
     searchTimer = setTimeout(function(){
-      ps.keywordSearch(q, function(data, status){
-        var r = document.getElementById('searchResults');
-        r.style.display='block';
-        if(status === kakao.maps.services.Status.OK){
-          r.innerHTML = data.slice(0, 6).map(function(d, i){
-            var name = d.place_name;
-            var addr = d.road_address_name || d.address_name || '';
-            return '<div data-idx="'+i+'"><b>'+escapeHtml(name)+'</b><br><span style="font-size:11.5px;color:var(--ink-soft);">'+escapeHtml(addr)+'</span></div>';
-          }).join('');
-
-          window._kakaoSearchResults = data.slice(0, 6);
-
-          Array.prototype.forEach.call(r.querySelectorAll('[data-idx]'), function(el){
-            el.addEventListener('click', function(){
-              var idx = parseInt(el.getAttribute('data-idx'), 10);
-              var item = window._kakaoSearchResults[idx];
-              selectKakaoPlace(item);
-            });
-          });
-          togglePicking(false);
-        } else {
-          r.innerHTML = '<div class="empty">검색 결과가 없어요. 지도를 직접 클릭해 위치를 지정해보세요.</div>';
-          togglePicking(true);
-        }
-      });
+      searchKakaoPlaces(q);
     }, 300);
   });
 
   function hideResults(){
     var r = document.getElementById('searchResults');
     r.style.display='none'; r.innerHTML='';
+  }
+
+  function searchKakaoPlaces(query){
+    var r = document.getElementById('searchResults');
+    if(!ps){
+      r.style.display='block';
+      r.innerHTML = '<div class="empty">카카오 맵 API 로딩 실패 (키 확인 필요)</div>';
+      return;
+    }
+    
+    ps.keywordSearch(query, function(data, status){
+      r.style.display='block';
+      if(status === kakao.maps.services.Status.OK){
+        r.innerHTML = data.slice(0, 8).map(function(d, i){
+          var name = d.place_name;
+          var addr = d.road_address_name || d.address_name || '';
+          return '<div data-idx="'+i+'"><b>'+escapeHtml(name)+'</b> · <span style="font-size:11px;color:var(--ink-soft);">'+escapeHtml(addr)+'</span></div>';
+        }).join('');
+
+        // 결과를 전역에 임시 저장하여 클릭 시 참조
+        window._kakaoSearchResults = data.slice(0, 8);
+
+        Array.prototype.forEach.call(r.querySelectorAll('[data-idx]'), function(el){
+          el.addEventListener('click', function(){
+            var idx = parseInt(el.getAttribute('data-idx'), 10);
+            var item = window._kakaoSearchResults[idx];
+            selectKakaoPlace(item);
+          });
+        });
+        togglePicking(false);
+      } else if(status === kakao.maps.services.Status.ZERO_RESULT){
+        r.innerHTML = '<div class="empty">검색 결과가 없어요. 지도를 클릭해서 위치를 지정해주세요.</div>';
+        togglePicking(true);
+      } else {
+        r.innerHTML = '<div class="empty">검색 중 오류가 발생했습니다.</div>';
+      }
+    });
   }
 
   function selectKakaoPlace(item){
@@ -666,9 +840,11 @@
 
   document.getElementById('stopDate').value = todayStr();
 
-  // ---------- 일정 추가 ----------
   function addStop(){
-    if(!state.selectedPlace) return;
+    if(!state.selectedPlace){
+      console.warn('add blocked: no place selected yet');
+      return;
+    }
     var stop = {
       id: uid(),
       name: state.selectedPlace.name,
@@ -684,182 +860,39 @@
     };
     state.stops.push(stop);
 
-    // 폼 초기화
+    // 입력 필드 초기화
     document.getElementById('placeSearch').value='';
     document.getElementById('selectedPlace').style.display='none';
     document.getElementById('stopTransportNote').value='';
     document.getElementById('stopTransportMin').value='';
     state.selectedPlace = null;
-    if(state.tempMarker){ state.tempMarker.setMap(null); state.tempMarker=null; }
+    try{
+      if(state.tempMarker){ map.removeLayer(state.tempMarker); state.tempMarker=null; }
+    }catch(err){ console.error('temp marker cleanup failed', err); }
     togglePicking(false);
     updateAddBtn();
-    renderAll();
+
+    try{
+      renderAll();
+    }catch(err){
+      console.error('renderAll failed after adding stop', err);
+    }
   }
 
   document.getElementById('addBtn').addEventListener('click', addStop);
 
-  // ---------- 지도 및 타임라인 렌더링 ----------
-  function renderMap(){
-    // 기존 마커 및 선 제거
-    markers.forEach(function(m){ m.setMap(null); });
-    markers = [];
-    polylines.forEach(function(p){ p.setMap(null); });
-    polylines = [];
-
-    var groups = groupByDay(sortedStops());
-    if(state.activeDay!=='all'){
-      groups = groups.filter(function(g){ return g.key===state.activeDay; });
+  document.getElementById('addForm').addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      if(!document.getElementById('addBtn').disabled) addStop();
     }
+  });
 
-    var bounds = new kakao.maps.LatLngBounds();
+  document.getElementById('tripTitle').addEventListener('input', function(e){
+    state.title = e.target.value;
+  });
 
-    groups.forEach(function(g, gi){
-      var color = state.activeDay==='all' ? dayColor(gi) : dayColor(indexOfDayKey(g.key));
-      var lineCoords = [];
-
-      g.stops.forEach(function(s, i){
-        var coords = new kakao.maps.LatLng(s.lat, s.lng);
-        bounds.extend(coords);
-        lineCoords.push(coords);
-
-        // 커스텀 마커 HTML 생성
-        var content = '<div class="trip-marker" style="background:'+color+';width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:11px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);">'+(i+1)+'</div>';
-        var customOverlay = new kakao.maps.CustomOverlay({
-          position: coords,
-          content: content,
-          yAnchor: 1
-        });
-        customOverlay.setMap(map);
-        markers.push(customOverlay);
-      });
-
-      // 장소 간 이동선 그리기
-      if(lineCoords.length > 1){
-        var polyline = new kakao.maps.Polyline({
-          path: lineCoords,
-          strokeWeight: 4,
-          strokeColor: color,
-          strokeOpacity: 0.8,
-          strokeStyle: 'solid'
-        });
-        polyline.setMap(map);
-        polylines.push(polyline);
-      }
-    });
-
-    if(groups.length && groups[0].stops.length){
-      map.setBounds(bounds);
-    }
-    renderLegend(groups);
-  }
-
-  function indexOfDayKey(key){
-    var order = groupByDay(sortedStops()).map(function(g){return g.key;});
-    return order.indexOf(key);
-  }
-
-  function renderLegend(groups){
-    var el = document.getElementById('legend');
-    var rows = ['subway','bus','walk','car'].map(function(m){
-      return '<div class="legend-row"><span class="legend-swatch mode-'+m+'" style="background:'+MODE_COLOR[m]+'"></span>'+MODE_LABEL[m]+'</div>';
-    }).join('');
-    el.innerHTML = rows;
-    el.style.display = state.stops.length ? 'block' : 'none';
-  }
-
-  function renderDayTabs(){
-    var groups = groupByDay(sortedStops());
-    var el = document.getElementById('dayTabs');
-    if(groups.length<2){ el.innerHTML=''; return; }
-    var html = '<span class="day-tab'+(state.activeDay==='all'?' active':'')+'" data-day="all">전체</span>';
-    groups.forEach(function(g){
-      html += '<span class="day-tab'+(state.activeDay===g.key?' active':'')+'" data-day="'+g.key+'">'+fmtDate(g.key==='__nodate__'?null:g.key)+'</span>';
-    });
-    el.innerHTML = html;
-    Array.prototype.forEach.call(el.querySelectorAll('.day-tab'), function(t){
-      t.addEventListener('click', function(){ state.activeDay=t.getAttribute('data-day'); renderAll(); });
-    });
-  }
-
-  function renderTimeline(){
-    var el = document.getElementById('timeline');
-    var groups = groupByDay(sortedStops());
-    if(state.activeDay!=='all') groups = groups.filter(function(g){return g.key===state.activeDay;});
-
-    if(!state.stops.length){
-      el.innerHTML = '<div class="empty-state">아직 추가된 장소가 없어요.<br>위에서 카카오 API로 장소를 검색해 일정을 만들어보세요.</div>';
-      return;
-    }
-
-    var html = '';
-    groups.forEach(function(g, gi){
-      var color = state.activeDay==='all' ? dayColor(gi) : dayColor(indexOfDayKey(g.key));
-      html += '<div class="day-group">';
-      html += '<div class="day-heading"><span class="day-dot" style="background:'+color+'"></span>'+fmtDate(g.key==='__nodate__'?null:g.key)+' · 장소 '+g.stops.length+'곳</div>';
-      html += '<ul class="stop-list">';
-      
-      g.stops.forEach(function(s, i){
-        var isLast = i===g.stops.length-1;
-        html += '<li class="stop-item">';
-        html += '<div class="stop-node" style="background:'+color+'">'+(i+1)+'</div>';
-        if(!isLast){
-          var mode = s.transport||'walk';
-          html += '<div class="stop-connector mode-'+mode+'"></div>';
-        }
-        html += '<div class="stop-card">';
-        html += '<div class="stop-top"><div><div class="stop-name">'+escapeHtml(s.name)+'</div><div class="stop-addr">'+escapeHtml(s.address||'')+'</div></div>';
-        html += '<div style="display:flex;align-items:flex-start;gap:4px;">';
-        html += '<div class="stop-time">'+(s.time||'--:--')+(s.duration?('<br>'+durLabel(s.duration)):'')+'</div>';
-        if(!state.viewMode) html += '<button class="stop-remove" data-remove="'+s.id+'" title="삭제">×</button>';
-        html += '</div></div>';
-        html += '</div>';
-
-        // 이동 정보 및 카카오맵 길찾기 링크 제공
-        if(!isLast){
-          var next = g.stops[i+1];
-          var mode2 = s.transport||'walk';
-          // 카카오맵 길찾기 URL 생성 (출발지/도착지 연동)
-          var kakaoMapRouteUrl = 'https://map.kakao.com/link/to/' + encodeURIComponent(next.name) + ',' + next.lat + ',' + next.lng;
-          
-          html += '<div class="transit-note">';
-          html += '<div class="transit-info"><span class="mode-badge mode-'+mode2+'">'+MODE_LABEL[mode2]+'</span>';
-          if(s.transportMin) html += '<span>약 '+s.transportMin+'분 소요</span>';
-          if(s.transportNote) html += '<span>· '+escapeHtml(s.transportNote)+'</span>';
-          html += '</div>';
-          html += '<a href="'+kakaoMapRouteUrl+'" target="_blank" class="map-link-btn">카카오 길찾기 ↗</a>';
-          html += '</div>';
-        }
-        html += '</li>';
-      });
-      html += '</ul></div>';
-    });
-    el.innerHTML = html;
-
-    if(!state.viewMode){
-      Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function(btn){
-        btn.addEventListener('click', function(){
-          var id = btn.getAttribute('data-remove');
-          state.stops = state.stops.filter(function(s){ return s.id!==id; });
-          renderAll();
-        });
-      });
-    }
-  }
-
-  function escapeHtml(str){
-    return (str||'').replace(/[&<>"']/g, function(c){
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-    });
-  }
-
-  function renderAll(){
-    renderDayTabs();
-    renderTimeline();
-    renderMap();
-    document.getElementById('tripTitle').value = state.title;
-  }
-
-  // ---------- 저장 및 공유 기능 (Firebase 스토리지 연동) ----------
+  // ---------- storage helpers ----------
   function genCode(){
     var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     var out='';
@@ -888,7 +921,32 @@
       });
   }
 
-  // 모달 제어
+  function loadRecentTrips(){
+    try{
+      if(!window.storage) return;
+      window.storage.get('my-trips', false)
+        .catch(function(){ return null; })
+        .then(function(res){
+          if(!res) return;
+          var list = [];
+          try{ list = JSON.parse(res.value); }catch(e){ return; }
+          if(!list.length) return;
+          var wrap = document.getElementById('recentWrap');
+          var el = document.getElementById('recentList');
+          wrap.style.display='block';
+          el.innerHTML = list.map(function(item){
+            return '<div class="recent-item"><span>'+escapeHtml(item.title||'제목 없음')+' <span class="recent-code">'+item.code+'</span></span><button data-code="'+item.code+'">불러오기</button></div>';
+          }).join('');
+          Array.prototype.forEach.call(el.querySelectorAll('[data-code]'), function(btn){
+            btn.addEventListener('click', function(){
+              openLoadModal(btn.getAttribute('data-code'));
+            });
+          });
+        });
+    }catch(e){ console.error('loadRecentTrips failed', e); }
+  }
+
+  // ---------- modals ----------
   function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
   function openShareModal(){
@@ -901,38 +959,42 @@
       '<div class="modal-overlay" id="ov1"><div class="modal modal-wrap">' +
       '<button class="modal-close" id="close1">×</button>' +
       '<h3>일정 공유하기</h3>' +
-      '<p>6자리 코드를 통해 다른 사람도 이 일정을 똑같이 볼 수 있습니다.</p>' +
-      '<div id="shareBody"><button class="btn-dark" id="genCodeBtn" style="width:100%;">공유 코드 및 링크 생성</button></div>' +
+      '<p>아래 코드를 저장하면, 상대방이 이 화면의 "코드로 불러오기"에 입력해 같은 일정을 볼 수 있어요. 링크로 열면 자동으로 불러와져요.</p>' +
+      '<div id="shareBody"><button class="btn-dark" id="genCodeBtn" style="width:100%;">공유 코드 만들기</button></div>' +
       '<div class="modal-status" id="shareStatus"></div>' +
       '</div></div>';
     document.getElementById('close1').addEventListener('click', closeModal);
     document.getElementById('ov1').addEventListener('click', function(e){ if(e.target.id==='ov1') closeModal(); });
     document.getElementById('genCodeBtn').addEventListener('click', function(){
       var status = document.getElementById('shareStatus');
-      status.textContent = '저장 중...';
+      status.textContent = '저장하는 중...';
       var code = genCode();
       saveTrip(code).then(function(res){
-        if(!res){ status.textContent='저장에 실패했어요.'; return; }
+        if(!res){ status.textContent='저장에 실패했어요. 다시 시도해주세요.'; return; }
         rememberMyTrip(code, state.title);
         var link = location.origin + location.pathname + '?code=' + code;
         var body = document.getElementById('shareBody');
         body.innerHTML =
           '<div class="code-display">'+code+'</div>' +
-          '<div class="modal-field"><label>공유 링크</label><input type="text" id="linkOut" readonly value="'+link+'"></div>' +
+          '<div class="modal-field"><label>공유 링크 (지원 환경에서 자동 로드)</label><input type="text" id="linkOut" readonly value="'+link+'"></div>' +
           '<div class="modal-actions"><button class="btn-secondary" id="copyCode">코드 복사</button><button class="btn-dark" id="copyLink">링크 복사</button></div>';
         document.getElementById('copyCode').addEventListener('click', function(){ copyText(code, this); });
         document.getElementById('copyLink').addEventListener('click', function(){ copyText(link, this); });
         status.textContent='';
+      }).catch(function(){
+        status.textContent='저장 중 오류가 발생했어요.';
       });
     });
   }
 
   function copyText(text, btn){
     var original = btn.textContent;
-    function done(ok){ btn.textContent = ok? '복사됨!' : '직접 복사해주세요'; setTimeout(function(){btn.textContent=original;},1500); }
+    function done(ok){ btn.textContent = ok? '복사됨!' : '직접 선택해 복사해주세요'; setTimeout(function(){btn.textContent=original;},1500); }
     if(navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(function(){done(true);}).catch(function(){done(false);});
-    } else { done(false); }
+    } else {
+      done(false);
+    }
   }
 
   function openLoadModal(prefill){
@@ -941,7 +1003,7 @@
       '<div class="modal-overlay" id="ov2"><div class="modal modal-wrap">' +
       '<button class="modal-close" id="close2">×</button>' +
       '<h3>코드로 불러오기</h3>' +
-      '<p>전달받은 6자리 공유 코드를 입력하세요.</p>' +
+      '<p>전달받은 6자리 공유 코드를 입력하면 그 일정을 볼 수 있어요.</p>' +
       '<div class="modal-field"><label>공유 코드</label><input type="text" id="codeIn" maxlength="6" style="text-transform:uppercase;letter-spacing:.1em;font-family:\'IBM Plex Mono\',monospace;" value="'+(prefill||'')+'"></div>' +
       '<div class="modal-actions"><button class="btn-secondary" id="cancelLoad">취소</button><button class="btn-dark" id="doLoad">불러오기</button></div>' +
       '<div class="modal-status" id="loadStatus"></div>' +
@@ -950,17 +1012,19 @@
     document.getElementById('cancelLoad').addEventListener('click', closeModal);
     document.getElementById('ov2').addEventListener('click', function(e){ if(e.target.id==='ov2') closeModal(); });
     document.getElementById('doLoad').addEventListener('click', function(){
-      var code = document.getElementById('codeIn'].value.trim().toUpperCase();
-      if(!code) return;
+      var code = document.getElementById('codeIn').value.trim().toUpperCase();
+      if(!code){ return; }
       var status = document.getElementById('loadStatus');
       status.textContent = '불러오는 중...';
       loadTrip(code).then(function(res){
-        if(!res){ status.textContent='일정을 찾을 수 없습니다.'; return; }
+        if(!res){ status.textContent='해당 코드의 일정을 찾을 수 없어요.'; return; }
         applyLoadedTrip(res.value, code);
         closeModal();
+      }).catch(function(){
+        status.textContent='해당 코드의 일정을 찾을 수 없어요. 코드를 다시 확인해주세요.';
       });
     });
-    if(prefill) setTimeout(function(){ document.getElementById('doLoad').click(); }, 50);
+    if(prefill){ setTimeout(function(){ document.getElementById('doLoad').click(); }, 50); }
   }
 
   function applyLoadedTrip(raw, code){
@@ -976,7 +1040,9 @@
       document.getElementById('addForm').style.display='none';
       addEditCloneButton();
       renderAll();
-    }catch(e){ alert('데이터 오류'); }
+    }catch(e){
+      alert('일정 데이터를 읽는 중 문제가 발생했어요.');
+    }
   }
 
   function addEditCloneButton(){
@@ -998,20 +1064,24 @@
 
   document.getElementById('shareOpenBtn').addEventListener('click', openShareModal);
   document.getElementById('loadOpenBtn').addEventListener('click', function(){ openLoadModal(); });
-  document.getElementById('tripTitle').addEventListener('input', function(e){ state.title = e.target.value; });
 
-  // 초기 실행
+  // ---------- boot ----------
   initMap();
+  loadRecentTrips();
   try{
     var urlCode = new URLSearchParams(location.search).get('code');
     if(urlCode && window.storage){
       loadTrip(urlCode.toUpperCase()).then(function(res){
-        if(res) applyLoadedTrip(res.value, urlCode.toUpperCase());
-        else renderAll();
+        if(res){ applyLoadedTrip(res.value, urlCode.toUpperCase()); }
+        else { renderAll(); }
       }).catch(function(){ renderAll(); });
-    } else { renderAll(); }
-  }catch(e){ renderAll(); }
-
+    } else {
+      renderAll();
+    }
+  }catch(e){
+    console.error('boot failed, falling back to plain render', e);
+    renderAll();
+  }
 })();
 </script>
 </body>
