@@ -1,7 +1,204 @@
-echo "# Trip" >> README.md
-git init
-git add README.md
-git commit -m "first commit"
-git branch -M main
-git remote add origin https://github.com/dakara2006/Trip.git
-git push -u origin main
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BeTravel - 나의 여행 일정</title>
+    <style>
+        /* 화면 전체 기본 스타일 (글씨를 크고 선명하게 설정) */
+        body {
+            font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+            font-size: 18px; 
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            font-size: 2.2em;
+            margin-bottom: 30px;
+        }
+        /* 왼쪽 일정 영역과 오른쪽 지도 영역을 나누는 틀 */
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .itinerary-section, .map-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            flex: 1 1 400px; /* 화면이 좁아지면 아래로 배치됨 */
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            transition: background 0.3s;
+            font-size: 18px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .share-btn {
+            background-color: #2ecc71;
+            margin-top: 15px;
+        }
+        .share-btn:hover {
+            background-color: #27ae60;
+        }
+        /* 추가된 일정이 보이는 목록 스타일 */
+        .itinerary-list {
+            margin-top: 30px;
+            border-top: 2px solid #eee;
+            padding-top: 20px;
+        }
+        .item {
+            background: #fdfdfd;
+            border-left: 6px solid #3498db;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .item h3 { margin: 0 0 10px 0; color: #2c3e50; font-size: 1.3em;}
+        .item p { margin: 6px 0; color: #555; }
+        
+        /* 지도 영역 자리 표시 */
+        #map {
+            width: 100%;
+            height: 100%;
+            min-height: 500px;
+            background-color: #e9e9e9;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #7f8c8d;
+            font-size: 1.2em;
+            text-align: center;
+            border: 2px dashed #bdc3c7;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>BeTravel 편안한 여행 일정 만들기</h1>
+
+    <div class="container">
+        <!-- 왼쪽: 일정 입력 및 목록 영역 -->
+        <div class="itinerary-section">
+            <h2>어디로 가실까요?</h2>
+            
+            <div class="form-group">
+                <label for="time">방문 시간</label>
+                <input type="time" id="time">
+            </div>
+
+            <div class="form-group">
+                <label for="place">장소 이름</label>
+                <input type="text" id="place" placeholder="예: 경복궁, 국립중앙박물관">
+            </div>
+
+            <div class="form-group">
+                <label for="duration">머무는 시간</label>
+                <select id="duration">
+                    <option value="1시간">1시간</option>
+                    <option value="2시간">2시간</option>
+                    <option value="3시간">3시간</option>
+                    <option value="반나절">반나절</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="transit">이동 수단</label>
+                <select id="transit">
+                    <option value="지하철 🚇">지하철 🚇</option>
+                    <option value="버스 🚌">버스 🚌</option>
+                    <option value="도보 🚶">도보 🚶</option>
+                </select>
+            </div>
+
+            <button onclick="addItinerary()">일정에 추가하기</button>
+
+            <div class="itinerary-list" id="list">
+                <!-- 추가한 일정들이 여기에 표시됩니다 -->
+            </div>
+
+            <button class="share-btn" onclick="shareTrip()">여행 일정 공유하기 (링크 생성)</button>
+        </div>
+
+        <!-- 오른쪽: 지도 영역 -->
+        <div class="map-section">
+            <div id="map">
+                이곳에 지도가 표시됩니다.<br>
+                (카카오맵 또는 네이버지도 연결 필요)
+            </div>
+        </div>
+    </div>
+
+    <!-- 간단한 동작을 위한 자바스크립트 -->
+    <script>
+        function addItinerary() {
+            const time = document.getElementById('time').value;
+            const place = document.getElementById('place').value;
+            const duration = document.getElementById('duration').value;
+            const transit = document.getElementById('transit').value;
+
+            if(!time || !place) {
+                alert("시간과 장소를 모두 입력해주세요!");
+                return;
+            }
+
+            const list = document.getElementById('list');
+            const newItem = document.createElement('div');
+            newItem.className = 'item';
+            newItem.innerHTML = `
+                <h3>📍 ${place}</h3>
+                <p><strong>방문 시간:</strong> ${time} (약 ${duration} 머무름)</p>
+                <p><strong>다음 이동 수단:</strong> ${transit}</p>
+            `;
+            list.appendChild(newItem);
+
+            // 입력칸 초기화
+            document.getElementById('place').value = '';
+            document.getElementById('time').value = '';
+        }
+
+        function shareTrip() {
+            // 실제 서비스에서는 서버에서 짧은 링크를 생성해 받아옵니다.
+            const dummyLink = "https://betravel.co/trip/abc1234";
+            
+            // 링크를 클립보드에 복사하는 기능
+            navigator.clipboard.writeText(dummyLink).then(() => {
+                alert("여행 일정이 저장되었습니다!\n\n공유 링크가 복사되었습니다: " + dummyLink + "\n(카카오톡 등에 붙여넣기 하시면 됩니다.)");
+            });
+        }
+    </script>
+</body>
+</html>
