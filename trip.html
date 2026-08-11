@@ -38,18 +38,13 @@
             </div>
 
             <div class="form-group">
-                <label for="place">장소 이름</label>
-                <input type="text" id="place" placeholder="예: 경복궁, 국립중앙박물관">
+                <label for="place">장소 이름 검색</label>
+                <input type="text" id="place" placeholder="예: 경복궁, 서울역">
             </div>
 
             <div class="form-group">
-                <label for="duration">머무는 시간</label>
-                <select id="duration">
-                    <option value="1시간">1시간</option>
-                    <option value="2시간">2시간</option>
-                    <option value="3시간">3시간</option>
-                    <option value="반나절">반나절</option>
-                </select>
+                <label for="duration">머무는 시간 (분 단위)</label>
+                <input type="number" id="duration" placeholder="예: 90 (분)" min="10" step="10" value="60">
             </div>
 
             <div class="form-group">
@@ -61,7 +56,7 @@
                 </select>
             </div>
 
-            <button onclick="addItinerary()">일정에 추가하기</button>
+            <button onclick="addItinerary()">위치 검색 및 일정에 추가</button>
 
             <div class="itinerary-list" id="list"></div>
             <button class="share-btn" onclick="shareTrip()">여행 일정 공유하기 (링크 생성)</button>
@@ -72,26 +67,24 @@
         </div>
     </div>
 
-    <!-- 카카오맵 API 연동 (여기 appkey 부분에 복사한 키를 넣으세요!) -->
+    <!-- 카카오맵 API 연동 -->
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
     
     <script>
         var map, ps, bounds;
 
-        // 지도를 그리는 기능
         window.onload = function() {
             var mapContainer = document.getElementById('map'); 
             var mapOption = { 
-                center: new kakao.maps.LatLng(37.566826, 126.978656), // 서울시청을 기본 중심으로 설정
-                level: 5 // 지도 확대 레벨
+                center: new kakao.maps.LatLng(37.566826, 126.978656), 
+                level: 5 
             }; 
             
             map = new kakao.maps.Map(mapContainer, mapOption); 
-            ps = new kakao.maps.services.Places(); // 장소 검색 객체 생성
-            bounds = new kakao.maps.LatLngBounds(); // 지도 범위를 재설정하기 위한 객체
+            ps = new kakao.maps.services.Places(); 
+            bounds = new kakao.maps.LatLngBounds(); 
         };
 
-        // 일정 추가 기능
         function addItinerary() {
             var time = document.getElementById('time').value;
             var placeName = document.getElementById('place').value;
@@ -99,47 +92,47 @@
             var transit = document.getElementById('transit').value;
 
             if(!time || !placeName) {
-                alert("시간과 장소를 모두 입력해주세요!");
+                alert("방문 시간과 장소 이름을 모두 입력해주세요!");
                 return;
             }
 
-            // 카카오 장소 검색 API로 장소 이름으로 좌표 찾기
-            ps.keywordSearch(placeName, function(data, status, pagination) {
+            // 키워드로 장소 검색 실행
+            ps.keywordSearch(placeName, function(data, status) {
                 if (status === kakao.maps.services.Status.OK) {
                     var coords = new kakao.maps.LatLng(data[0].y, data[0].x);
                     
-                    // 지도에 마커 표시
+                    // 지도 마커 생성
                     var marker = new kakao.maps.Marker({
                         map: map,
                         position: coords
                     });
 
-                    // 마커 위에 장소 이름 표시
+                    // 인포윈도우 생성
                     var infowindow = new kakao.maps.InfoWindow({
-                        content: `<div style="padding:5px;font-size:14px;color:#333;">${placeName}</div>`
+                        content: `<div style="padding:5px;font-size:14px;color:#333;">${data[0].place_name}</div>`
                     });
                     infowindow.open(map, marker);
 
-                    // 추가된 장소가 지도 중앙에 오도록 지도 범위 재설정
                     bounds.extend(coords);
                     map.setBounds(bounds);
 
-                    // 왼쪽 목록에 일정 텍스트 추가
+                    // 일정 목록에 추가 (분 단위 반영)
                     var list = document.getElementById('list');
                     var newItem = document.createElement('div');
                     newItem.className = 'item';
                     newItem.innerHTML = `
                         <h3>📍 ${data[0].place_name}</h3>
-                        <p><strong>방문 시간:</strong> ${time} (약 ${duration} 머무름)</p>
+                        <p><strong>방문 시간:</strong> ${time} (약 ${duration}분 머무름)</p>
                         <p><strong>다음 이동 수단:</strong> ${transit}</p>
                     `;
                     list.appendChild(newItem);
 
-                    // 입력칸 초기화
+                    // 입력창 초기화
                     document.getElementById('place').value = '';
                     document.getElementById('time').value = '';
+                    document.getElementById('duration').value = '60';
                 } else {
-                    alert("장소를 찾을 수 없습니다. 정확한 이름을 입력해주세요.");
+                    alert("검색 결과가 없습니다. 정확한 장소 명칭을 입력해주세요.");
                 }
             });
         }
