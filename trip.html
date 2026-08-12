@@ -913,8 +913,17 @@
     var url = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${startLng}&SY=${startLat}&EX=${endLng}&EY=${endLat}&apiKey=${encodeURIComponent(ODSAY_API_KEY)}`;
     
     fetch(url)
+      fetch(url)
       .then(res => res.json())
       .then(data => {
+        // 🚨 오디세이 서버가 에러(거절)를 보냈을 때 팝업 띄우기
+        if(data.error) {
+          console.error("ODsay API Error:", data.error.msg);
+          alert("오디세이 API 거절 사유: " + data.error.msg + "\n(도메인 설정이나 API 키를 확인해주세요!)");
+          document.getElementById('autoCalcBadge').textContent = "(API 거절됨)";
+          return;
+        }
+
         if(data.result && data.result.path && data.result.path.length > 0) {
           var path = data.result.path[0];
           var time = path.info.totalTime;
@@ -925,14 +934,14 @@
           
           if(type === 1) document.getElementById('stopTransport').value = 'subway';
           else if(type === 2) document.getElementById('stopTransport').value = 'bus';
-          else document.getElementById('stopTransport').value = 'subway'; // 혼합인 경우 기본 지하철
+          else document.getElementById('stopTransport').value = 'subway'; 
         } else {
           document.getElementById('autoCalcBadge').textContent = "(대중교통 경로 없음)";
         }
       })
       .catch(e => {
         console.error("ODsay API Error:", e);
-        document.getElementById('autoCalcBadge').textContent = "(계산 실패)";
+        document.getElementById('autoCalcBadge').textContent = "(통신 실패)";
       });
   }
 
