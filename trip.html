@@ -394,7 +394,7 @@
 
 <header class="board">
   <div class="board-badge">BeTravel</div>
-  <input id="tripTitle" class="trip-title-input" value="어르신 맞춤형 여행" />
+  <input id="tripTitle" class="trip-title-input" value="나의 여행" />
   <span id="viewTag" class="view-tag" style="display:none;">보기 모드</span>
   <div class="board-actions">
     <button class="btn" id="loadOpenBtn">코드로 불러오기</button>
@@ -497,7 +497,6 @@
 
   // =========================================================================
   // [중요] ODsay 대중교통 길찾기 API 키 입력란
-  // https://lab.odsay.com/ 에서 무료 가입 후 API 키를 발급받아 아래에 붙여넣으세요.
   // =========================================================================
   var ODSAY_API_KEY = "	1Bvx7yJi5paJSexfKQLWPA";
 
@@ -507,7 +506,7 @@
   var DAY_COLORS = ['#D6472F','#2B6CB8','#2E8B57','#C9822E','#7C5CBF','#B23A6D'];
 
   var state = {
-    title: '어르신 맞춤형 여행 일정',
+    title: '나의 여행',
     stops: [],
     activeDay: 'all',
     viewMode: false,
@@ -584,7 +583,6 @@
       sp.textContent = '선택됨 (지도 클릭): '+state.selectedPlace.address;
       togglePicking(false);
       
-      // 이동 시간 자동 계산 (장소가 1개 이상 있을 때)
       triggerAutoCalc(lng, lat);
       
       updateAddBtn();
@@ -729,7 +727,6 @@
         html += '<li class="stop-item">';
         html += '<div class="stop-node" style="background:'+color+'">'+(i+1)+'</div>';
         
-        // 이동선 (다음 장소의 transport 정보를 활용)
         if(!isLast){
           var nextNode = g.stops[i+1];
           var mode = nextNode.transport || 'walk';
@@ -744,7 +741,6 @@
         html += '</div></div>';
         html += '</div>';
         
-        // 장소와 장소 사이의 이동 메모 표시
         if(!isLast){
           var next = g.stops[i+1];
           var mode2 = next.transport || 'walk';
@@ -785,9 +781,9 @@
   function updateTransportFormVisibility() {
     var ts = document.getElementById('transportSection');
     if(state.stops.length > 0) {
-      ts.style.display = 'block'; // 1개 이상의 장소가 있으면 이동수단 폼 보이기
+      ts.style.display = 'block'; 
     } else {
-      ts.style.display = 'none';  // 첫 장소면 이동수단 폼 숨기기
+      ts.style.display = 'none';  
     }
   }
 
@@ -872,7 +868,6 @@
     sp.style.display='block';
     sp.textContent = '선택됨: '+addr;
     
-    // 이전 장소가 존재하면 ODsay API로 대중교통 이동시간 자동 계산
     triggerAutoCalc(lng, lat);
 
     updateAddBtn();
@@ -897,14 +892,14 @@
 
   // ---------- ODsay 대중교통 길찾기 API 연동 ----------
   function triggerAutoCalc(endLng, endLat) {
-    if(state.stops.length === 0) return; // 첫 장소면 계산 X
+    if(state.stops.length === 0) return; 
     
     var lastStop = state.stops[state.stops.length - 1];
     var startLng = lastStop.lng;
     var startLat = lastStop.lat;
 
-    if(!ODSAY_API_KEY || ODSAY_API_KEY.indexOf("발급받은") !== -1) {
-      document.getElementById('autoCalcBadge').textContent = "(API 키 필요)";
+    if(!ODSAY_API_KEY || ODSAY_API_KEY.indexOf("여기에") !== -1) {
+      document.getElementById('autoCalcBadge').textContent = "(API 키 미입력)";
       return;
     }
 
@@ -913,13 +908,15 @@
     var url = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${startLng}&SY=${startLat}&EX=${endLng}&EY=${endLat}&apiKey=${encodeURIComponent(ODSAY_API_KEY)}`;
     
     fetch(url)
-      fetch(url)
       .then(res => res.json())
       .then(data => {
-        // 🚨 오디세이 서버가 에러(거절)를 보냈을 때 팝업 띄우기
+        // [수정사항] 콘솔창에 오디세이 응답 원본을 기록하여 에러 원인 파악
+        console.log("ODsay API 응답 데이터:", data);
+
+        // 오디세이 서버 자체에서 에러(거절)를 뿜어낸 경우 팝업 띄우기
         if(data.error) {
-          console.error("ODsay API Error:", data.error.msg);
-          alert("오디세이 API 거절 사유: " + data.error.msg + "\n(도메인 설정이나 API 키를 확인해주세요!)");
+          var errMsg = data.error.msg || data.error.message || "원인 불명";
+          alert("오디세이 API 통신 거절됨:\n" + errMsg + "\n\n(콘솔창을 확인해주세요!)");
           document.getElementById('autoCalcBadge').textContent = "(API 거절됨)";
           return;
         }
@@ -963,7 +960,6 @@
     };
     state.stops.push(stop);
 
-    // 폼 초기화
     document.getElementById('placeSearch').value='';
     document.getElementById('selectedPlace').style.display='none';
     document.getElementById('stopTransportNote').value='';
@@ -989,7 +985,7 @@
     state.title = e.target.value;
   });
 
-  // ---------- 저장 및 공유 기능 (Firebase 연결 전 임시 코드) ----------
+  // ---------- 저장 및 공유 (Firebase 적용 전 임시) ----------
   function genCode(){
     var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     var out='';
@@ -1021,7 +1017,6 @@
       });
   }
 
-  // 모달 창 로직 생략 (공유 및 불러오기 버튼 작동)
   function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
   function openShareModal(){
