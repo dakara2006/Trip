@@ -340,7 +340,7 @@
     font-size:14px;line-height:1;padding:0;
     display:flex;align-items:center;justify-content:center;
   }
-  .stop-remove:hover{background:rgba(255,3B,48,.12);color:var(--red);}
+  .stop-remove:hover{background:rgba(255,59,48,.12);color:var(--red);}
   .transit-note{
     display:flex;align-items:center;justify-content:space-between;
     font-size:12px;
@@ -577,7 +577,7 @@
           </div>
         </div>
 
-        <!-- 2단계: 이동 설정 파트 (두 번째 장소부터 자동 표시) -->
+        <!-- 2단계: 이동 설정 파트 -->
         <div id="transportSection" style="display:none;">
           <h3 style="margin-top: 24px;">2단계: 이전 장소에서 여기까지 이동</h3>
           <div class="field">
@@ -621,7 +621,7 @@
 <!-- 카카오맵 API 로드 -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 
-<!-- 🔥 파이어베이스 연동을 위한 라이브러리 추가 -->
+<!-- 🔥 파이어베이스 추가 라이브러리 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -631,7 +631,7 @@
 
   // =========================================================================
   // 🔥 파이어베이스 설정 및 초기화
-  // 파이어베이스 콘솔에서 발급받은 본인의 정보로 반드시 교체해주세요!
+  // 파이어베이스 콘솔에서 본인의 앱 정보로 아래 내용을 교체해주세요!
   // =========================================================================
   var firebaseConfig = {
     apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k",
@@ -644,12 +644,10 @@
     measurementId: "G-S827RE69HH"
   };
 
-  // 파이어베이스 앱 초기화
   if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
   }
   var db = firebase.database();
-
 
   // =========================================================================
   // ODsay 대중교통 길찾기 API 키
@@ -661,18 +659,17 @@
   var MODE_ICON  = {subway:'🚇', bus:'🚌', walk:'🚶', car:'🚗'};
   var DAY_COLORS = ['#007AFF','#34C759','#FF9500','#AF52DE','#FF2D55','#5AC8FA'];
 
-  // rough speed assumptions for estimated (non-API) modes
   var WALK_KMH = 4.5;
-  var CAR_KMH = 22; // city driving incl. lights/traffic, rough
+  var CAR_KMH = 22; 
 
   var state = {
     title: '나의 여행',
     stops: [],
     activeDay: 'all',
     viewMode: false,
-    currentStep: 0, // index into the storyboard sequence while in view mode
+    currentStep: 0, 
     selectedPlace: null,
-    selectedTransport: null, // {mode, minutes, arrival}
+    selectedTransport: null, 
     pendingPick: false,
     tempMarker: null
   };
@@ -1441,6 +1438,7 @@
         document.getElementById('copyCode').addEventListener('click', function(){ copyText(code, this); });
         document.getElementById('copyLink').addEventListener('click', function(){ copyText(link, this); });
         status.textContent='';
+        loadRecentTrips(); // 저장 후 목록 바로 새로고침
       });
     });
   }
