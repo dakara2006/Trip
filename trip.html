@@ -342,6 +342,13 @@
     display:flex;align-items:center;justify-content:center;
   }
   .stop-remove:hover{background:rgba(255,59,48,.12);color:var(--red);}
+  .stop-edit{
+    background:var(--fill);border:none;color:var(--blue);
+    width:22px;height:22px;border-radius:50%;
+    font-size:12px;line-height:1;padding:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .stop-edit:hover{background:rgba(0,122,255,.14);}
   .transit-note{
     display:flex;align-items:center;justify-content:space-between;
     font-size:12px;
@@ -946,6 +953,7 @@
         html += '<div class="stop-top"><div><div class="stop-name">'+escapeHtml(s.name)+'</div><div class="stop-addr">'+escapeHtml(s.address||'')+'</div></div>';
         html += '<div style="display:flex;align-items:flex-start;gap:4px;">';
         html += '<div class="stop-time">'+(s.time||'--:--')+(s.duration?('<br>'+durLabel(s.duration)):'')+'</div>';
+        if(!state.viewMode) html += '<button class="stop-edit" data-edit="'+s.id+'" title="수정">✎</button>';
         if(!state.viewMode) html += '<button class="stop-remove" data-remove="'+s.id+'" title="삭제">×</button>';
         html += '</div></div>';
         if(s.note) html += '<div class="stop-note">📝 '+escapeHtml(s.note)+'</div>';
@@ -975,6 +983,11 @@
           var id = btn.getAttribute('data-remove');
           state.stops = state.stops.filter(function(s){ return s.id!==id; });
           renderAll();
+        });
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-edit]'), function(btn){
+        btn.addEventListener('click', function(){
+          openEditStopModal(btn.getAttribute('data-edit'));
         });
       });
     }
@@ -1418,6 +1431,59 @@
   }
 
   function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+  // recalculates auto arrival times for everything after startIndex, following
+  // the same insertion-order chain used when stops are first added
+  function recomputeTimesFrom(startIndex){
+    for(var i = startIndex; i < state.stops.length; i++){
+      if(i === 0) continue; // the very first stop's time is always manual
+      var prev = state.stops[i-1];
+      var s = state.stops[i];
+      if(s.transportMin != null){
+        var departure = addMinutes(prev.time, prev.duration);
+        s.time = addMinutes(departure, s.transportMin);
+      }
+    }
+  }
+
+  function openEditStopModal(stopId){
+    var idx = state.stops.findIndex(function(s){ return s.id === stopId; });
+    if(idx === -1) return;
+    var stop = state.stops[idx];
+
+    var root = document.getElementById('modalRoot');
+    root.innerHTML =
+      '<div class="modal-overlay" id="ovEdit"><div class="modal modal-wrap">' +
+      '<button class="modal-close" id="closeEdit">×</button>' +
+      '<h3>'+escapeHtml(stop.name)+'</h3>' +
+      '<p>머무는 시간과 메모를 바꿀 수 있어요. 머무는 시간을 바꾸면 이후 장소들의 도착 시간도 자동으로 다시 계산돼요.</p>' +
+      '<div class="modal-field"><label>머무는 시간 (분)</label><input type="number" id="editDuration" min="0" step="5" value="'+stop.duration+'"></div>' +
+      '<div class="chips" id="editDurationChips" style="margin:-4px 0 14px;">' +
+        '<span class="chip" data-min="30">30분</span>' +
+        '<span class="chip" data-min="60">1시간</span>' +
+        '<span class="chip" data-min="90">1시간30분</span>' +
+        '<span class="chip" data-min="120">2시간</span>' +
+      '</div>' +
+      '<div class="modal-field"><label>메모</label><input type="text" id="editNote" value="'+escapeHtml(stop.note||'')+'" placeholder="이 장소에 대한 메모를 남겨보세요"></div>' +
+      '<div class="modal-actions"><button class="btn-secondary" id="cancelEdit">취소</button><button class="btn-dark" id="saveEdit">저장</button></div>' +
+      '</div></div>';
+
+    document.getElementById('closeEdit').addEventListener('click', closeModal);
+    document.getElementById('cancelEdit').addEventListener('click', closeModal);
+    document.getElementById('ovEdit').addEventListener('click', function(e){ if(e.target.id==='ovEdit') closeModal(); });
+    document.getElementById('editDurationChips').addEventListener('click', function(e){
+      if(e.target.classList.contains('chip')){
+        document.getElementById('editDuration').value = e.target.getAttribute('data-min');
+      }
+    });
+    document.getElementById('saveEdit').addEventListener('click', function(){
+      stop.duration = parseInt(document.getElementById('editDuration').value, 10) || 0;
+      stop.note = document.getElementById('editNote').value.trim();
+      recomputeTimesFrom(idx + 1);
+      closeModal();
+      renderAll();
+    });
+  }
 
   function openShareModal(){
     if(!state.stops.length){
