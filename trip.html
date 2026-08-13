@@ -18,20 +18,20 @@
     --bus:#34C759;
     --walk:#8E8E93;
     --car:#FF9500;
-    --fill:rgba(120,120,128,.12);
-    --fill-strong:rgba(120,120,128,.20);
+    --fill:#7676801F;
+    --fill-strong:#76768033;
     --radius-lg:20px;
     --radius-md:14px;
     --radius-sm:10px;
     --day0:#007AFF; --day1:#34C759; --day2:#FF9500; --day3:#AF52DE; --day4:#FF2D55; --day5:#5AC8FA;
-    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Apple SD Gothic Neo","Segoe UI",Roboto,"Malgun Gothic",sans-serif;
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;height:100%;background:var(--paper);color:var(--ink);}
   body{display:flex;flex-direction:column;min-height:100vh;}
   input,select,button,textarea{font-family:inherit;font-size:15px;}
   button{cursor:pointer;}
-  button:active{transform:scale(.97);}
+  button:active{transform:scale(.97);opacity:.7;}
 
   /* ===== Header (iOS large-title nav bar) ===== */
   .board{
@@ -59,21 +59,26 @@
     flex-shrink:0;
   }
   .trip-title-input{
-    flex:1;
-    min-width:120px;
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:min(46%,320px);
+    text-align:center;
     background:transparent;
     border:none;
     color:var(--ink);
     font-weight:700;
-    font-size:22px;
+    font-size:17px;
     letter-spacing:-.01em;
-    padding:4px 2px;
+    padding:6px 4px;
     outline:none;
     border-radius:8px;
+    z-index:1;
   }
   .trip-title-input:focus{background:var(--fill);}
   .trip-title-input[readonly]{background:transparent;}
-  .board-actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;}
+  .board-actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;position:relative;z-index:2;}
   .btn{
     border:none;
     background:var(--fill);
@@ -159,7 +164,7 @@
     border-radius:var(--radius-lg);
     padding:16px;
     margin-bottom:16px;
-    box-shadow:0 1px 2px rgba(0,0,0,.04),0 1px 8px rgba(0,0,0,.03);
+    box-shadow:0 4px 20px rgba(0,0,0,.04);
   }
   .add-form h3{
     margin:0 0 12px;
@@ -302,9 +307,10 @@
     z-index:2;
   }
   .stop-connector{
-    position:absolute;left:12px;top:34px;bottom:-6px;
-    width:2px;
+    position:absolute;left:12.25px;top:34px;bottom:-6px;
+    width:1.5px;
     border-radius:2px;
+    opacity:.55;
   }
   .stop-connector.mode-subway{background:var(--subway);}
   .stop-connector.mode-bus{background:var(--bus);}
@@ -316,7 +322,7 @@
     border-radius:var(--radius-md);
     padding:12px 14px;
     margin-bottom:6px;
-    box-shadow:0 1px 2px rgba(0,0,0,.04),0 1px 6px rgba(0,0,0,.03);
+    box-shadow:0 4px 20px rgba(0,0,0,.04);
   }
   .stop-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
   .stop-name{font-weight:700;font-size:14.5px;letter-spacing:-.01em;}
@@ -343,9 +349,9 @@
   }
   .transit-info {display:flex;align-items:center;gap:6px;}
   .mode-badge{
-    font-size:10.5px;
+    font-size:10px;
     font-weight:700;
-    padding:3px 9px;
+    padding:2.5px 8px;
     border-radius:20px;
     color:#fff;
   }
@@ -446,6 +452,21 @@
     .map-wrap{order:1;height:40vh;}
     .board-actions{width:100%;}
     .legend{left:12px;right:12px;}
+  }
+  @media (max-width:520px){
+    .board{flex-wrap:wrap;}
+    .trip-title-input{
+      position:static;
+      transform:none;
+      width:auto;
+      flex:1 1 100%;
+      text-align:left;
+      font-size:19px;
+      order:3;
+    }
+    .board-badge{order:1;}
+    .view-tag{order:2;}
+    .board-actions{order:4;margin-left:0;}
   }
 </style>
 </head>
@@ -1202,7 +1223,7 @@
       '<button class="modal-close" id="close2">×</button>' +
       '<h3>코드로 불러오기</h3>' +
       '<p>전달받은 6자리 공유 코드를 입력하세요.</p>' +
-      '<div class="modal-field"><label>공유 코드</label><input type="text" id="codeIn" maxlength="6" style="text-transform:uppercase;letter-spacing:.1em;font-family:\'IBM Plex Mono\',monospace;" value="'+(prefill||'')+'"></div>' +
+      '<div class="modal-field"><label>공유 코드</label><input type="text" id="codeIn" maxlength="6" style="text-transform:uppercase;letter-spacing:.14em;font-weight:700;" value="'+(prefill||'')+'"></div>' +
       '<div class="modal-actions"><button class="btn-secondary" id="cancelLoad">취소</button><button class="btn-dark" id="doLoad">불러오기</button></div>' +
       '<div class="modal-status" id="loadStatus"></div>' +
       '</div></div>';
