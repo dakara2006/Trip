@@ -726,36 +726,51 @@
       groups = groups.filter(function(g){ return g.key===state.activeDay; });
     }
 
+    // color + dash pattern per transport mode, driven by MODE_COLOR
+    var TRANSPORT_LINE_STYLE = {
+      subway: { color: MODE_COLOR.subway, strokeStyle: 'solid',    strokeWeight: 5 },
+      bus:    { color: MODE_COLOR.bus,    strokeStyle: 'solid',    strokeWeight: 5 },
+      walk:   { color: MODE_COLOR.walk,   strokeStyle: 'shortdot', strokeWeight: 4 },
+      car:    { color: MODE_COLOR.car,    strokeStyle: 'dash',     strokeWeight: 4 }
+    };
+
     var bounds = new kakao.maps.LatLngBounds();
     var hasStops = false;
 
     groups.forEach(function(g, gi){
       var color = state.activeDay==='all' ? dayColor(gi) : dayColor(indexOfDayKey(g.key));
-      var linePath = [];
+      var coordsList = [];
 
       g.stops.forEach(function(s, i){
         hasStops = true;
         var coords = new kakao.maps.LatLng(s.lat, s.lng);
         bounds.extend(coords);
-        linePath.push(coords);
+        coordsList.push(coords);
 
         var content = '<div class="trip-marker" style="background:'+color+'">'+(i+1)+'</div>';
         var customOverlay = new kakao.maps.CustomOverlay({
             position: coords,
             content: content,
-            yAnchor: 1
+            xAnchor: 0.5,
+            yAnchor: 0.5
         });
         customOverlay.setMap(map);
         markers.push(customOverlay);
       });
 
-      if(linePath.length > 1) {
+      // draw one segment per leg, styled by that leg's transport mode
+      // (next.transport describes how you get FROM stop i TO stop i+1)
+      for(var i = 0; i < coordsList.length - 1; i++){
+        var next = g.stops[i+1];
+        var mode = next.transport || 'walk';
+        var lineStyle = TRANSPORT_LINE_STYLE[mode] || TRANSPORT_LINE_STYLE.walk;
+
         var polyline = new kakao.maps.Polyline({
-            path: linePath,
-            strokeWeight: 5,
-            strokeColor: color,
-            strokeOpacity: 0.75,
-            strokeStyle: 'shortdash'
+            path: [coordsList[i], coordsList[i+1]],
+            strokeWeight: lineStyle.strokeWeight,
+            strokeColor: lineStyle.color,
+            strokeOpacity: 0.8,
+            strokeStyle: lineStyle.strokeStyle
         });
         polyline.setMap(map);
         polylines.push(polyline);
