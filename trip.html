@@ -406,8 +406,7 @@
     display:flex;align-items:center;justify-content:center;
     color:#fff;font-weight:800;font-size:13px;
     line-height:1;
-    border:2.5px solid #fff;
-    box-shadow:0 4px 12px rgba(0,0,0,.2);
+    box-shadow:0 4px 14px rgba(0,0,0,.28);
   }
   .trip-marker.current{
     width:42px;height:42px;
@@ -838,6 +837,10 @@
         coordsList.push(coords);
 
         var isCurrent = highlightId && s.id === highlightId;
+
+        // during storyboard playback, only the current step's marker is shown
+        if(state.viewMode && !isCurrent) return;
+
         var markerClass = 'trip-marker' + (isCurrent ? ' current' : '');
         var content = '<div class="'+markerClass+'" style="background:'+color+'">'+(i+1)+'</div>';
 
@@ -894,7 +897,7 @@
         }).join('') + '</div>';
     }
     el.innerHTML = rows + dayRows;
-    el.style.display = state.stops.length ? 'block' : 'none';
+    el.style.display = (state.stops.length && !state.viewMode) ? 'block' : 'none';
   }
 
   // ---------- timeline ----------
@@ -1005,7 +1008,7 @@
       document.getElementById('timeline').style.display = 'none';
       document.getElementById('storyboard').style.display = 'flex';
       if(state.stops.length){
-        renderStoryboard();
+        renderStoryboard(false);
       } else {
         document.getElementById('storyboard').innerHTML = '<div class="empty-state">표시할 장소가 없어요.</div>';
         renderMap();
@@ -1025,7 +1028,8 @@
     return sortedStops();
   }
 
-  function renderStoryboard(){
+  function renderStoryboard(animate){
+    if(animate === undefined) animate = true;
     var steps = getStoryboardSteps();
     if(!steps.length) return;
     if(state.currentStep < 0) state.currentStep = 0;
@@ -1079,17 +1083,51 @@
 
     if(map && current){
       var coords = new kakao.maps.LatLng(current.lat, current.lng);
-      map.panTo(coords);
-      map.setLevel(4, { animate: true });
+      if(animate){
+        // glide the viewport along the straight line to the next stop,
+        // instead of an instant jump, so it feels like traveling the route
+        animateMapTravel(coords, 550, function(){
+          map.setLevel(4, { animate: true });
+        });
+      } else {
+        map.setCenter(coords);
+        map.setLevel(4);
+      }
     }
     renderMap();
+  }
+
+  // moves the map viewport smoothly in a straight line toward toCoords,
+  // starting from wherever the map is currently centered
+  function animateMapTravel(toCoords, duration, onDone){
+    if(!map){ if(onDone) onDone(); return; }
+    var start = map.getCenter();
+    var lat1 = start.getLat(), lng1 = start.getLng();
+    var lat2 = toCoords.getLat(), lng2 = toCoords.getLng();
+    var steps = 24;
+    var stepTime = duration / steps;
+    var i = 0;
+    function tick(){
+      i++;
+      var t = i / steps;
+      var eased = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2; // ease-in-out
+      var lat = lat1 + (lat2 - lat1) * eased;
+      var lng = lng1 + (lng2 - lng1) * eased;
+      map.setCenter(new kakao.maps.LatLng(lat, lng));
+      if(i < steps){
+        setTimeout(tick, stepTime);
+      } else if(onDone){
+        onDone();
+      }
+    }
+    tick();
   }
 
   function goToStep(idx){
     var steps = getStoryboardSteps();
     if(idx < 0 || idx > steps.length - 1) return;
     state.currentStep = idx;
-    renderStoryboard();
+    renderStoryboard(true);
   }
 
   function cloneToEdit(){
