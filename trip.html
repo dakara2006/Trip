@@ -218,6 +218,36 @@
   .add-btn:hover{background:#0e1620;}
   .add-btn:disabled{background:var(--line);color:var(--ink-soft);cursor:not-allowed;}
 
+  /* ===== Transport option chips (auto travel-time picker) ===== */
+  .transport-options{display:flex;flex-wrap:wrap;gap:8px;}
+  .transport-chip{
+    border:1px solid var(--line);
+    background:#fff;
+    border-radius:9px;
+    padding:8px 12px;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--ink);
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .transport-chip:hover{border-color:var(--ink);}
+  .transport-chip.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .transport-chip .chip-time{font-family:'IBM Plex Mono',monospace;}
+  .transport-chip.estimated .chip-time::after{content:' *';}
+  .transport-empty{font-size:12px;color:var(--ink-soft);padding:6px 2px;}
+  .transport-note-hint{font-size:10.5px;color:var(--ink-soft);margin-top:6px;width:100%;}
+  .arrival-preview{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:14px;
+    font-weight:600;
+    background:var(--paper-dim);
+    border-radius:8px;
+    padding:10px 12px;
+    text-align:center;
+  }
+
   /* ===== Timeline ===== */
   .day-group{margin-bottom:22px;}
   .day-heading{
@@ -295,7 +325,7 @@
   .mode-badge.mode-bus{background:var(--bus);}
   .mode-badge.mode-walk{background:var(--walk);}
   .mode-badge.mode-car{background:var(--car);}
-  
+
   .map-link-btn{
     font-size:11px;
     color:#3498db;
@@ -395,7 +425,7 @@
   <aside class="sidebar">
     <div class="day-tabs" id="dayTabs"></div>
     <div class="panel-scroll">
-      
+
       <div class="add-form" id="addForm">
         <!-- 1단계: 장소 설정 파트 -->
         <h3>1단계: 방문할 장소 및 시간 설정</h3>
@@ -413,8 +443,8 @@
             <label>날짜</label>
             <input type="date" id="stopDate" />
           </div>
-          <div class="field">
-            <label>도착 시간</label>
+          <div class="field" id="firstArrivalField">
+            <label>도착 시간 (첫 장소는 필수 입력)</label>
             <input type="time" id="stopTime" />
           </div>
         </div>
@@ -429,26 +459,17 @@
           </div>
         </div>
 
-        <!-- 2단계: 이동 설정 파트 -->
+        <!-- 2단계: 이동 설정 파트 (두 번째 장소부터 자동 표시) -->
         <div id="transportSection" style="display:none;">
           <h3 style="margin-top: 24px;">2단계: 이전 장소에서 여기까지 이동</h3>
-          <div class="row2">
-            <div class="field">
-              <label>이동 수단</label>
-              <select id="stopTransport">
-                <option value="subway">지하철 🚇</option>
-                <option value="bus">버스 🚌</option>
-                <option value="walk">도보 🚶</option>
-                <option value="car">자동차 🚗</option>
-              </select>
+          <div class="field">
+            <label>이동 수단 선택 (예상 시간 자동 계산)</label>
+            <div class="transport-options" id="transportOptions">
+              <div class="transport-empty">위치를 선택하면 이동 시간이 자동으로 계산돼요.</div>
             </div>
-            <div class="field">
-              <label>
-                <span>이동 시간 (분)</span>
-                <span id="autoCalcBadge" style="color:var(--red); font-size:11px; font-weight:600;"></span>
-              </label>
-              <input type="number" id="stopTransportMin" min="0" step="1" placeholder="직접 입력 가능" />
-            </div>
+          </div>
+          <div class="field" id="arrivalPreviewField" style="display:none;">
+            <div class="arrival-preview" id="arrivalPreview"></div>
           </div>
           <div class="field">
             <label>이동 메모 (선택)</label>
@@ -485,13 +506,18 @@
   "use strict";
 
   // =========================================================================
-  // ODsay 대중교통 길찾기 API 키 
+  // ODsay 대중교통 길찾기 API 키
   // =========================================================================
   var ODSAY_API_KEY = "1Bvx7yJi5paJSexfKQLWPA";
 
   var MODE_LABEL = {subway:'지하철', bus:'버스', walk:'도보', car:'자동차'};
   var MODE_COLOR = {subway:'#2B6CB8', bus:'#2E8B57', walk:'#8B8577', car:'#C9822E'};
+  var MODE_ICON  = {subway:'🚇', bus:'🚌', walk:'🚶', car:'🚗'};
   var DAY_COLORS = ['#D6472F','#2B6CB8','#2E8B57','#C9822E','#7C5CBF','#B23A6D'];
+
+  // rough speed assumptions for estimated (non-API) modes
+  var WALK_KMH = 4.5;
+  var CAR_KMH = 22; // city driving incl. lights/traffic, rough
 
   var state = {
     title: '나의 여행',
@@ -499,6 +525,7 @@
     activeDay: 'all',
     viewMode: false,
     selectedPlace: null,
+    selectedTransport: null, // {mode, minutes, arrival}
     pendingPick: false,
     tempMarker: null
   };
@@ -523,6 +550,27 @@
     if(h) return h+'시간 머무름';
     return m+'분 머무름';
   }
+  function addMinutes(hhmm, mins){
+    if(!hhmm) return '';
+    var p = hhmm.split(':');
+    var total = parseInt(p[0],10)*60 + parseInt(p[1],10) + (mins||0);
+    total = ((total % 1440) + 1440) % 1440;
+    var h = Math.floor(total/60), m = total % 60;
+    return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+  }
+  function haversineKm(lat1,lng1,lat2,lng2){
+    var R = 6371;
+    var dLat = (lat2-lat1) * Math.PI/180;
+    var dLng = (lng2-lng1) * Math.PI/180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
+            Math.sin(dLng/2)*Math.sin(dLng/2);
+    var c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+  function estimateWalkMinutes(km){ return Math.max(1, Math.round(km / WALK_KMH * 60)); }
+  function estimateCarMinutes(km){ return Math.max(1, Math.round(km / CAR_KMH * 60)); }
+
   function sortedStops(){
     return state.stops.slice().sort(function(a,b){
       var ka=(a.date||'9999')+a.time, kb=(b.date||'9999')+b.time;
@@ -543,15 +591,15 @@
 
   // ---------- 카카오 맵 초기화 ----------
   function initMap(){
-    var mapContainer = document.getElementById('map'); 
-    var mapOption = { 
-        center: new kakao.maps.LatLng(37.566826, 126.978656), 
-        level: 5 
-    }; 
-    
-    map = new kakao.maps.Map(mapContainer, mapOption); 
+    var mapContainer = document.getElementById('map');
+    var mapOption = {
+        center: new kakao.maps.LatLng(37.566826, 126.978656),
+        level: 5
+    };
+
+    map = new kakao.maps.Map(mapContainer, mapOption);
     if(typeof kakao !== 'undefined' && kakao.maps.services) {
-      ps = new kakao.maps.services.Places(); 
+      ps = new kakao.maps.services.Places();
     }
 
     kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
@@ -570,9 +618,9 @@
       sp.style.display='block';
       sp.textContent = '선택됨 (지도 클릭): '+state.selectedPlace.address;
       togglePicking(false);
-      
-      triggerAutoCalc(lng, lat);
-      
+
+      loadTransportOptions(lat, lng);
+
       updateAddBtn();
       showPreviewMarker(lat, lng);
     });
@@ -614,7 +662,7 @@
     if(state.activeDay!=='all'){
       groups = groups.filter(function(g){ return g.key===state.activeDay; });
     }
-    
+
     var bounds = new kakao.maps.LatLngBounds();
     var hasStops = false;
 
@@ -640,10 +688,10 @@
 
       if(linePath.length > 1) {
         var polyline = new kakao.maps.Polyline({
-            path: linePath, 
-            strokeWeight: 4, 
-            strokeColor: color, 
-            strokeOpacity: 0.8, 
+            path: linePath,
+            strokeWeight: 4,
+            strokeColor: color,
+            strokeOpacity: 0.8,
             strokeStyle: 'solid'
         });
         polyline.setMap(map);
@@ -656,7 +704,7 @@
     }
     renderLegend(groups);
   }
-  
+
   function indexOfDayKey(key){
     var order = groupByDay(sortedStops()).map(function(g){return g.key;});
     return order.indexOf(key);
@@ -714,7 +762,7 @@
         var isLast = i===g.stops.length-1;
         html += '<li class="stop-item">';
         html += '<div class="stop-node" style="background:'+color+'">'+(i+1)+'</div>';
-        
+
         if(!isLast){
           var nextNode = g.stops[i+1];
           var mode = nextNode.transport || 'walk';
@@ -728,7 +776,7 @@
         if(!state.viewMode) html += '<button class="stop-remove" data-remove="'+s.id+'" title="삭제">×</button>';
         html += '</div></div>';
         html += '</div>';
-        
+
         if(!isLast){
           var next = g.stops[i+1];
           var mode2 = next.transport || 'walk';
@@ -753,7 +801,6 @@
         btn.addEventListener('click', function(){
           var id = btn.getAttribute('data-remove');
           state.stops = state.stops.filter(function(s){ return s.id!==id; });
-          updateTransportFormVisibility();
           renderAll();
         });
       });
@@ -768,15 +815,19 @@
 
   function updateTransportFormVisibility() {
     var ts = document.getElementById('transportSection');
+    var firstField = document.getElementById('firstArrivalField');
     if(state.stops.length > 0) {
-      ts.style.display = 'block'; 
+      ts.style.display = 'block';
+      firstField.style.display = 'none';
     } else {
-      ts.style.display = 'none';  
+      ts.style.display = 'none';
+      firstField.style.display = 'block';
     }
   }
 
   function renderAll(){
     updateTransportFormVisibility();
+    updateAddBtn();
     renderDayTabs();
     renderTimeline();
     renderMap();
@@ -788,10 +839,10 @@
   document.getElementById('placeSearch').addEventListener('input', function(e){
     var q = e.target.value.trim();
     state.selectedPlace = null;
+    resetTransportSelection();
     document.getElementById('selectedPlace').style.display='none';
-    document.getElementById('autoCalcBadge').textContent = '';
     updateAddBtn();
-    
+
     if(searchTimer) clearTimeout(searchTimer);
     if(!q){ hideResults(); return; }
 
@@ -812,7 +863,7 @@
       r.innerHTML = '<div class="empty">카카오 맵 API 로딩 실패 (키 확인 필요)</div>';
       return;
     }
-    
+
     ps.keywordSearch(query, function(data, status){
       r.style.display='block';
       if(status === kakao.maps.services.Status.OK){
@@ -855,8 +906,8 @@
     var sp = document.getElementById('selectedPlace');
     sp.style.display='block';
     sp.textContent = '선택됨: '+addr;
-    
-    triggerAutoCalc(lng, lat);
+
+    loadTransportOptions(lat, lng);
 
     updateAddBtn();
     showPreviewMarker(lat, lng);
@@ -866,8 +917,17 @@
     togglePicking(!state.pendingPick);
   });
 
+  document.getElementById('stopTime').addEventListener('input', updateAddBtn);
+
   function updateAddBtn(){
-    document.getElementById('addBtn').disabled = !state.selectedPlace;
+    var isFirst = state.stops.length === 0;
+    var ok = !!state.selectedPlace;
+    if(isFirst){
+      ok = ok && !!document.getElementById('stopTime').value;
+    } else {
+      ok = ok && !!state.selectedTransport;
+    }
+    document.getElementById('addBtn').disabled = !ok;
   }
 
   document.getElementById('durationChips').addEventListener('click', function(e){
@@ -878,65 +938,105 @@
 
   document.getElementById('stopDate').value = todayStr();
 
-  // ---------- ODsay 대중교통 길찾기 API 연동 ----------
-  function triggerAutoCalc(endLng, endLat) {
-    if(state.stops.length === 0) return; 
-    
-    var lastStop = state.stops[state.stops.length - 1];
-    var startLng = lastStop.lng;
-    var startLat = lastStop.lat;
+  // ---------- 이동 수단별 예상 시간 (지하철·버스: ODsay API / 자동차·도보: 직선거리 추정) ----------
+  function resetTransportSelection(){
+    state.selectedTransport = null;
+    var previewField = document.getElementById('arrivalPreviewField');
+    if(previewField) previewField.style.display = 'none';
+    var container = document.getElementById('transportOptions');
+    if(container) container.innerHTML = '<div class="transport-empty">위치를 선택하면 이동 시간이 자동으로 계산돼요.</div>';
+  }
 
-    if(!ODSAY_API_KEY || ODSAY_API_KEY.indexOf("여기에") !== -1) {
-      document.getElementById('autoCalcBadge').textContent = "(API 키 미입력)";
+  function loadTransportOptions(toLat, toLng){
+    resetTransportSelection();
+    updateAddBtn();
+
+    if(state.stops.length === 0) return; // first stop has no "from" location
+
+    var last = state.stops[state.stops.length - 1];
+    var km = haversineKm(last.lat, last.lng, toLat, toLng);
+    var walkMin = estimateWalkMinutes(km);
+    var carMin = estimateCarMinutes(km);
+    var transitTimes = {subway:null, bus:null};
+
+    var container = document.getElementById('transportOptions');
+    container.innerHTML = '<div class="transport-empty">대중교통 시간을 불러오는 중...</div>';
+
+    function renderChips(){
+      var opts = [];
+      if(transitTimes.subway!=null) opts.push({mode:'subway', minutes:transitTimes.subway, estimated:false});
+      if(transitTimes.bus!=null) opts.push({mode:'bus', minutes:transitTimes.bus, estimated:false});
+      opts.push({mode:'car', minutes:carMin, estimated:true});
+      opts.push({mode:'walk', minutes:walkMin, estimated:true});
+
+      container.innerHTML = opts.map(function(o){
+        return '<button type="button" class="transport-chip'+(o.estimated?' estimated':'')+'" data-mode="'+o.mode+'" data-min="'+o.minutes+'">'+
+          '<span>'+MODE_ICON[o.mode]+'</span><span>'+MODE_LABEL[o.mode]+'</span><span class="chip-time">'+o.minutes+'분</span>'+
+          '</button>';
+      }).join('') + '<div class="transport-note-hint">* 자동차·도보는 직선거리 기반 추정 시간이에요.</div>';
+
+      Array.prototype.forEach.call(container.querySelectorAll('.transport-chip'), function(btn){
+        btn.addEventListener('click', function(){
+          Array.prototype.forEach.call(container.querySelectorAll('.transport-chip'), function(b){ b.classList.remove('active'); });
+          btn.classList.add('active');
+          var mode = btn.getAttribute('data-mode');
+          var minutes = parseInt(btn.getAttribute('data-min'),10);
+          selectTransportOption(mode, minutes);
+        });
+      });
+    }
+
+    renderChips(); // show car/walk immediately while transit request is in flight
+
+    if(!ODSAY_API_KEY || ODSAY_API_KEY.indexOf("여기에") !== -1){
       return;
     }
 
-    document.getElementById('autoCalcBadge').textContent = "(계산 중...)";
-    
-    var url = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${startLng}&SY=${startLat}&EX=${endLng}&EY=${endLat}&apiKey=${encodeURIComponent(ODSAY_API_KEY)}`;
-    
+    var url = "https://api.odsay.com/v1/api/searchPubTransPathT?SX="+last.lng+"&SY="+last.lat+"&EX="+toLng+"&EY="+toLat+"&apiKey="+encodeURIComponent(ODSAY_API_KEY);
+
     fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        console.log("ODsay API 응답 데이터:", data);
-
-        if(data.error) {
-          var errMsg = "원인 불명";
-          if(Array.isArray(data.error) && data.error.length > 0) {
-              errMsg = data.error[0].message || data.error[0].msg || "인증 오류";
-          } else if(data.error.message || data.error.msg) {
-              errMsg = data.error.message || data.error.msg;
-          }
-          
-          alert("오디세이 API 통신 거절됨 🚨\n사유: " + errMsg + "\n\n(도메인 설정이나 API 키를 확인해주세요!)");
-          document.getElementById('autoCalcBadge').textContent = "(API 거절됨)";
-          return;
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if(data && data.result && data.result.path){
+          data.result.path.forEach(function(p){
+            var t = p.info && p.info.totalTime;
+            if(t==null) return;
+            if(p.pathType===1){ transitTimes.subway = transitTimes.subway==null ? t : Math.min(transitTimes.subway, t); }
+            if(p.pathType===2){ transitTimes.bus = transitTimes.bus==null ? t : Math.min(transitTimes.bus, t); }
+            if(p.pathType===3){
+              transitTimes.subway = transitTimes.subway==null ? t : Math.min(transitTimes.subway, t);
+              transitTimes.bus = transitTimes.bus==null ? t : Math.min(transitTimes.bus, t);
+            }
+          });
         }
-
-        if(data.result && data.result.path && data.result.path.length > 0) {
-          var path = data.result.path[0];
-          var time = path.info.totalTime;
-          var type = path.pathType; 
-          
-          document.getElementById('stopTransportMin').value = time;
-          document.getElementById('autoCalcBadge').textContent = "(자동 계산 완료 ⚡)";
-          
-          if(type === 1) document.getElementById('stopTransport').value = 'subway';
-          else if(type === 2) document.getElementById('stopTransport').value = 'bus';
-          else document.getElementById('stopTransport').value = 'subway'; 
-        } else {
-          document.getElementById('autoCalcBadge').textContent = "(대중교통 경로 없음)";
-        }
+        renderChips();
       })
-      .catch(e => {
-        console.error("ODsay API Error:", e);
-        document.getElementById('autoCalcBadge').textContent = "(통신 실패)";
+      .catch(function(err){
+        console.error("ODsay API Error:", err);
+        renderChips(); // car/walk options are still shown
       });
+  }
+
+  function selectTransportOption(mode, minutes){
+    var last = state.stops[state.stops.length - 1];
+    var departure = addMinutes(last.time, last.duration);
+    var arrival = addMinutes(departure, minutes);
+    state.selectedTransport = { mode: mode, minutes: minutes, arrival: arrival };
+
+    var previewField = document.getElementById('arrivalPreviewField');
+    var preview = document.getElementById('arrivalPreview');
+    preview.textContent = '예상 도착 시간 ' + arrival;
+    previewField.style.display = 'block';
+    updateAddBtn();
   }
 
   // ---------- 일정 추가 ----------
   function addStop(){
     if(!state.selectedPlace) return;
+    var isFirst = state.stops.length === 0;
+    if(isFirst && !document.getElementById('stopTime').value) return;
+    if(!isFirst && !state.selectedTransport) return;
+
     var stop = {
       id: uid(),
       name: state.selectedPlace.name,
@@ -944,10 +1044,10 @@
       lat: state.selectedPlace.lat,
       lng: state.selectedPlace.lng,
       date: document.getElementById('stopDate').value || null,
-      time: document.getElementById('stopTime').value || '',
+      time: isFirst ? document.getElementById('stopTime').value : state.selectedTransport.arrival,
       duration: parseInt(document.getElementById('stopDuration').value,10) || 0,
-      transport: document.getElementById('stopTransport').value,
-      transportMin: parseInt(document.getElementById('stopTransportMin').value,10) || null,
+      transport: isFirst ? null : state.selectedTransport.mode,
+      transportMin: isFirst ? null : state.selectedTransport.minutes,
       transportNote: document.getElementById('stopTransportNote').value.trim()
     };
     state.stops.push(stop);
@@ -955,12 +1055,12 @@
     document.getElementById('placeSearch').value='';
     document.getElementById('selectedPlace').style.display='none';
     document.getElementById('stopTransportNote').value='';
-    document.getElementById('stopTransportMin').value='';
-    document.getElementById('autoCalcBadge').textContent='';
+    document.getElementById('stopTime').value='';
     state.selectedPlace = null;
+    resetTransportSelection();
     if(state.tempMarker){ state.tempMarker.setMap(null); state.tempMarker=null; }
     togglePicking(false);
-    updateAddBtn();
+
     renderAll();
   }
 
@@ -988,7 +1088,7 @@
   function saveTrip(code){
     var payload = JSON.stringify({title:state.title, stops:state.stops, savedAt:Date.now()});
     if(window.storage) return window.storage.set('trip:'+code, payload, true);
-    return Promise.resolve(true); 
+    return Promise.resolve(true);
   }
 
   function loadTrip(code){
@@ -1083,12 +1183,36 @@
     if(prefill) setTimeout(function(){ document.getElementById('doLoad').click(); }, 50);
   }
 
+  function applyLoadedTrip(raw, code){
+    try{
+      var data = JSON.parse(raw);
+      state.title = data.title || '공유된 여행';
+      state.stops = data.stops || [];
+      state.viewMode = true;
+      state.activeDay = 'all';
+      document.getElementById('viewTag').style.display='inline-block';
+      document.getElementById('viewTag').textContent = '보기 모드 · '+code;
+      document.getElementById('tripTitle').readOnly = true;
+      document.getElementById('addForm').style.display='none';
+      renderAll();
+    }catch(e){
+      alert('일정 데이터를 읽는 중 문제가 발생했어요.');
+    }
+  }
+
   document.getElementById('shareOpenBtn').addEventListener('click', openShareModal);
   document.getElementById('loadOpenBtn').addEventListener('click', function(){ openLoadModal(); });
-  
+
   // 초기 실행
   initMap();
   renderAll();
+
+  var urlCode = new URLSearchParams(location.search).get('code');
+  if(urlCode){
+    loadTrip(urlCode.toUpperCase()).then(function(res){
+      if(res){ applyLoadedTrip(res.value, urlCode.toUpperCase()); }
+    });
+  }
 
 })();
 </script>
