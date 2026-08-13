@@ -408,6 +408,61 @@
     border:2.5px solid #fff;
     box-shadow:0 4px 12px rgba(0,0,0,.2);
   }
+  .trip-marker.current{
+    width:42px;height:42px;
+    font-size:16px;
+    z-index:999;
+    animation:markerPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes markerPulse{
+    0%{ box-shadow:0 4px 12px rgba(0,0,0,.25), 0 0 0 0 rgba(0,122,255,.45); }
+    70%{ box-shadow:0 4px 12px rgba(0,0,0,.25), 0 0 0 14px rgba(0,122,255,0); }
+    100%{ box-shadow:0 4px 12px rgba(0,0,0,.25), 0 0 0 0 rgba(0,122,255,0); }
+  }
+
+  /* ===== Storyboard (shared-trip playback) panel ===== */
+  .storyboard-panel{
+    background:var(--card);
+    border-radius:var(--radius-lg);
+    padding:18px;
+    box-shadow:0 4px 20px rgba(0,0,0,.04);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .storyboard-transit{
+    display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+    font-size:12px;font-weight:500;color:var(--ink-soft);
+    background:var(--fill);
+    border-radius:20px;
+    padding:6px 12px;
+    width:fit-content;
+  }
+  .storyboard-step-index{
+    font-size:12.5px;font-weight:700;color:var(--blue);
+    letter-spacing:.01em;
+  }
+  .storyboard-name{font-size:23px;font-weight:800;letter-spacing:-.02em;color:var(--ink);}
+  .storyboard-addr{font-size:13px;color:var(--ink-soft);margin-top:-4px;}
+  .storyboard-meta{display:flex;gap:22px;margin-top:2px;}
+  .storyboard-meta-item{display:flex;flex-direction:column;gap:3px;}
+  .storyboard-meta-label{font-size:11px;color:var(--ink-soft);font-weight:500;}
+  .storyboard-meta-value{font-size:16px;font-weight:700;color:var(--ink);}
+  .storyboard-dots{display:flex;justify-content:center;align-items:center;gap:5px;margin:2px 0;}
+  .storyboard-dot{width:6px;height:6px;border-radius:50%;background:var(--fill-strong);transition:.2s;}
+  .storyboard-dot.active{background:var(--blue);width:18px;border-radius:3px;}
+  .storyboard-nav{display:flex;gap:10px;}
+  .storyboard-nav .nav-btn{
+    flex:1;
+    background:var(--fill);color:var(--ink);border:none;
+    padding:13px;border-radius:var(--radius-md);font-weight:700;font-size:14.5px;
+  }
+  .storyboard-nav .nav-btn:disabled{opacity:.35;cursor:not-allowed;}
+  .storyboard-nav .nav-btn.primary{background:var(--blue);color:#fff;}
+  .storyboard-clone-btn{
+    width:100%;background:var(--fill);color:var(--blue);border:none;
+    padding:12px;border-radius:var(--radius-md);font-weight:700;font-size:13.5px;
+  }
 
   /* ===== Modal (iOS alert / sheet style) ===== */
   .modal-overlay{
@@ -545,6 +600,8 @@
 
       <div id="timeline"></div>
 
+      <div id="storyboard" class="storyboard-panel" style="display:none;"></div>
+
       <div class="recent" id="recentWrap" style="display:none;">
         <h4>최근 공유한 일정</h4>
         <div id="recentList"></div>
@@ -587,6 +644,7 @@
     stops: [],
     activeDay: 'all',
     viewMode: false,
+    currentStep: 0, // index into the storyboard sequence while in view mode
     selectedPlace: null,
     selectedTransport: null, // {mode, minutes, arrival}
     pendingPick: false,
@@ -734,6 +792,13 @@
       car:    { color: MODE_COLOR.car,    strokeStyle: 'dash',     strokeWeight: 4 }
     };
 
+    // while in storyboard (view) mode, the step currently being shown gets a highlighted marker
+    var highlightId = null;
+    if(state.viewMode){
+      var storySteps = getStoryboardSteps();
+      if(storySteps[state.currentStep]) highlightId = storySteps[state.currentStep].id;
+    }
+
     var bounds = new kakao.maps.LatLngBounds();
     var hasStops = false;
 
@@ -747,7 +812,9 @@
         bounds.extend(coords);
         coordsList.push(coords);
 
-        var content = '<div class="trip-marker" style="background:'+color+'">'+(i+1)+'</div>';
+        var isCurrent = highlightId && s.id === highlightId;
+        var markerClass = 'trip-marker' + (isCurrent ? ' current' : '');
+        var content = '<div class="'+markerClass+'" style="background:'+color+'">'+(i+1)+'</div>';
         var customOverlay = new kakao.maps.CustomOverlay({
             position: coords,
             content: content,
@@ -906,10 +973,106 @@
   function renderAll(){
     updateTransportFormVisibility();
     updateAddBtn();
-    renderDayTabs();
-    renderTimeline();
-    renderMap();
     document.getElementById('tripTitle').value = state.title;
+
+    if(state.viewMode){
+      document.getElementById('dayTabs').style.display = 'none';
+      document.getElementById('timeline').style.display = 'none';
+      document.getElementById('storyboard').style.display = 'block';
+      if(state.stops.length){
+        renderStoryboard();
+      } else {
+        document.getElementById('storyboard').innerHTML = '<div class="empty-state">표시할 장소가 없어요.</div>';
+        renderMap();
+      }
+    } else {
+      document.getElementById('dayTabs').style.display = '';
+      document.getElementById('timeline').style.display = '';
+      document.getElementById('storyboard').style.display = 'none';
+      renderDayTabs();
+      renderTimeline();
+      renderMap();
+    }
+  }
+
+  // ---------- 스토리보드(공유 일정 재생) 모드 ----------
+  function getStoryboardSteps(){
+    return sortedStops(); // whole trip, chronological, ignoring day tabs
+  }
+
+  function renderStoryboard(){
+    var steps = getStoryboardSteps();
+    if(!steps.length) return;
+    if(state.currentStep < 0) state.currentStep = 0;
+    if(state.currentStep > steps.length - 1) state.currentStep = steps.length - 1;
+
+    var idx = state.currentStep;
+    var current = steps[idx];
+
+    var html = '';
+
+    if(idx > 0 && current.transport){
+      var mode = current.transport || 'walk';
+      html += '<div class="storyboard-transit">';
+      html += '<span class="mode-badge mode-'+mode+'">'+MODE_LABEL[mode]+'</span>';
+      if(current.transportMin) html += '<span>'+current.transportMin+'분 이동</span>';
+      if(current.transportNote) html += '<span>· '+escapeHtml(current.transportNote)+'</span>';
+      html += '</div>';
+    }
+
+    html += '<div class="storyboard-step-index">'+(idx+1)+'번째 장소 · 총 '+steps.length+'곳</div>';
+    html += '<div><div class="storyboard-name">'+escapeHtml(current.name)+'</div>';
+    html += '<div class="storyboard-addr">'+escapeHtml(current.address||'')+'</div></div>';
+
+    html += '<div class="storyboard-meta">';
+    html += '<div class="storyboard-meta-item"><span class="storyboard-meta-label">도착 시간</span><span class="storyboard-meta-value">'+(current.time||'--:--')+'</span></div>';
+    html += '<div class="storyboard-meta-item"><span class="storyboard-meta-label">머무는 시간</span><span class="storyboard-meta-value">'+(durLabel(current.duration)||'-')+'</span></div>';
+    html += '</div>';
+
+    html += '<div class="storyboard-dots">';
+    steps.forEach(function(_, i){
+      html += '<span class="storyboard-dot'+(i===idx?' active':'')+'"></span>';
+    });
+    html += '</div>';
+
+    html += '<div class="storyboard-nav">';
+    html += '<button type="button" class="nav-btn" id="storyPrevBtn"'+(idx===0?' disabled':'')+'>이전 장소</button>';
+    html += '<button type="button" class="nav-btn primary" id="storyNextBtn"'+(idx===steps.length-1?' disabled':'')+'>다음 장소</button>';
+    html += '</div>';
+
+    html += '<button type="button" class="storyboard-clone-btn" id="cloneEditBtn">복제해서 편집하기</button>';
+
+    var panel = document.getElementById('storyboard');
+    panel.innerHTML = html;
+
+    document.getElementById('storyPrevBtn').addEventListener('click', function(){ goToStep(state.currentStep - 1); });
+    document.getElementById('storyNextBtn').addEventListener('click', function(){ goToStep(state.currentStep + 1); });
+    document.getElementById('cloneEditBtn').addEventListener('click', cloneToEdit);
+
+    // pan + zoom the map to the current step, then re-render markers so the
+    // current one gets the highlighted/pulsing style
+    if(map && current){
+      var coords = new kakao.maps.LatLng(current.lat, current.lng);
+      map.setLevel(4);
+      map.panTo(coords);
+    }
+    renderMap();
+  }
+
+  function goToStep(idx){
+    var steps = getStoryboardSteps();
+    if(idx < 0 || idx > steps.length - 1) return;
+    state.currentStep = idx;
+    renderStoryboard();
+  }
+
+  function cloneToEdit(){
+    state.viewMode = false;
+    state.currentStep = 0;
+    document.getElementById('viewTag').style.display = 'none';
+    document.getElementById('tripTitle').readOnly = false;
+    document.getElementById('addForm').style.display = 'block';
+    renderAll();
   }
 
   // ---------- 카카오 API 검색 ----------
@@ -1267,6 +1430,7 @@
       state.title = data.title || '공유된 여행';
       state.stops = data.stops || [];
       state.viewMode = true;
+      state.currentStep = 0;
       state.activeDay = 'all';
       document.getElementById('viewTag').style.display='inline-block';
       document.getElementById('viewTag').textContent = '보기 모드 · '+code;
