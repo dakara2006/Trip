@@ -327,6 +327,7 @@
   .stop-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
   .stop-name{font-weight:700;font-size:14.5px;letter-spacing:-.01em;}
   .stop-addr{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .stop-note{font-size:11.5px;color:var(--ink-soft);margin-top:6px;padding-top:6px;border-top:1px solid var(--line);line-height:1.4;}
   .stop-time{
     font-size:12.5px;
     font-weight:600;
@@ -444,6 +445,13 @@
   }
   .storyboard-name{font-size:23px;font-weight:800;letter-spacing:-.02em;color:var(--ink);}
   .storyboard-addr{font-size:13px;color:var(--ink-soft);margin-top:-4px;}
+  .storyboard-note{
+    font-size:13px;color:var(--ink);
+    background:var(--fill);
+    border-radius:var(--radius-sm);
+    padding:10px 12px;
+    line-height:1.5;
+  }
   .storyboard-meta{display:flex;gap:22px;margin-top:2px;}
   .storyboard-meta-item{display:flex;flex-direction:column;gap:3px;}
   .storyboard-meta-label{font-size:11px;color:var(--ink-soft);font-weight:500;}
@@ -576,6 +584,10 @@
             <span class="chip" data-min="120">2시간</span>
           </div>
         </div>
+        <div class="field">
+          <label>메모 (선택)</label>
+          <input type="text" id="stopNote" placeholder="이 장소에 대한 메모를 남겨보세요" />
+        </div>
 
         <!-- 2단계: 이동 설정 파트 -->
         <div id="transportSection" style="display:none;">
@@ -589,10 +601,6 @@
           <div class="field" id="arrivalPreviewField" style="display:none;">
             <div class="arrival-preview" id="arrivalPreview"></div>
           </div>
-          <div class="field">
-            <label>이동 메모 (선택)</label>
-            <input type="text" id="stopTransportNote" placeholder="예: 3호선 환승 후 도보 5분" />
-          </div>
         </div>
 
         <button type="button" class="add-btn" id="addBtn" disabled>일정에 장소 추가하기</button>
@@ -602,10 +610,6 @@
 
       <div id="storyboard" class="storyboard-panel" style="display:none;"></div>
 
-      <div class="recent" id="recentWrap" style="display:none;">
-        <h4>최근 공유한 일정</h4>
-        <div id="recentList"></div>
-      </div>
     </div>
   </aside>
 
@@ -660,16 +664,16 @@
   var DAY_COLORS = ['#007AFF','#34C759','#FF9500','#AF52DE','#FF2D55','#5AC8FA'];
 
   var WALK_KMH = 4.5;
-  var CAR_KMH = 22; 
+  var CAR_KMH = 22;
 
   var state = {
     title: '나의 여행',
     stops: [],
     activeDay: 'all',
     viewMode: false,
-    currentStep: 0, 
+    currentStep: 0,
     selectedPlace: null,
-    selectedTransport: null, 
+    selectedTransport: null,
     pendingPick: false,
     tempMarker: null
   };
@@ -836,7 +840,7 @@
         var isCurrent = highlightId && s.id === highlightId;
         var markerClass = 'trip-marker' + (isCurrent ? ' current' : '');
         var content = '<div class="'+markerClass+'" style="background:'+color+'">'+(i+1)+'</div>';
-        
+
         var customOverlay = new kakao.maps.CustomOverlay({
             position: coords,
             content: content,
@@ -941,6 +945,7 @@
         html += '<div class="stop-time">'+(s.time||'--:--')+(s.duration?('<br>'+durLabel(s.duration)):'')+'</div>';
         if(!state.viewMode) html += '<button class="stop-remove" data-remove="'+s.id+'" title="삭제">×</button>';
         html += '</div></div>';
+        if(s.note) html += '<div class="stop-note">📝 '+escapeHtml(s.note)+'</div>';
         html += '</div>';
 
         if(!isLast){
@@ -951,7 +956,6 @@
           html += '<div class="transit-note">';
           html += '<div class="transit-info"><span class="mode-badge mode-'+mode2+'">'+MODE_LABEL[mode2]+'</span>';
           if(next.transportMin) html += '<span>약 '+next.transportMin+'분 이동</span>';
-          if(next.transportNote) html += '<span>· '+escapeHtml(next.transportNote)+'</span>';
           html += '</div>';
           html += '<a href="'+kakaoMapRouteUrl+'" target="_blank" class="map-link-btn">길찾기 ↗</a>';
           html += '</div>';
@@ -1018,7 +1022,7 @@
 
   // ---------- 스토리보드(공유 일정 재생) 모드 ----------
   function getStoryboardSteps(){
-    return sortedStops(); 
+    return sortedStops();
   }
 
   function renderStoryboard(){
@@ -1037,13 +1041,16 @@
       html += '<div class="storyboard-transit">';
       html += '<span class="mode-badge mode-'+mode+'">'+MODE_LABEL[mode]+'</span>';
       if(current.transportMin) html += '<span>'+current.transportMin+'분 이동</span>';
-      if(current.transportNote) html += '<span>· '+escapeHtml(current.transportNote)+'</span>';
       html += '</div>';
     }
 
     html += '<div class="storyboard-step-index">'+(idx+1)+'번째 장소 · 총 '+steps.length+'곳</div>';
     html += '<div><div class="storyboard-name">'+escapeHtml(current.name)+'</div>';
     html += '<div class="storyboard-addr">'+escapeHtml(current.address||'')+'</div></div>';
+
+    if(current.note){
+      html += '<div class="storyboard-note">📝 '+escapeHtml(current.note)+'</div>';
+    }
 
     html += '<div class="storyboard-meta">';
     html += '<div class="storyboard-meta-item"><span class="storyboard-meta-label">도착 시간</span><span class="storyboard-meta-value">'+(current.time||'--:--')+'</span></div>';
@@ -1072,8 +1079,8 @@
 
     if(map && current){
       var coords = new kakao.maps.LatLng(current.lat, current.lng);
-      map.setLevel(4);
       map.panTo(coords);
+      map.setLevel(4, { animate: true });
     }
     renderMap();
   }
@@ -1273,7 +1280,7 @@
       })
       .catch(function(err){
         console.error("ODsay API Error:", err);
-        renderChips(); 
+        renderChips();
       });
   }
 
@@ -1306,15 +1313,15 @@
       date: document.getElementById('stopDate').value || null,
       time: isFirst ? document.getElementById('stopTime').value : state.selectedTransport.arrival,
       duration: parseInt(document.getElementById('stopDuration').value,10) || 0,
+      note: document.getElementById('stopNote').value.trim(),
       transport: isFirst ? null : state.selectedTransport.mode,
-      transportMin: isFirst ? null : state.selectedTransport.minutes,
-      transportNote: document.getElementById('stopTransportNote').value.trim()
+      transportMin: isFirst ? null : state.selectedTransport.minutes
     };
     state.stops.push(stop);
 
     document.getElementById('placeSearch').value='';
     document.getElementById('selectedPlace').style.display='none';
-    document.getElementById('stopTransportNote').value='';
+    document.getElementById('stopNote').value='';
     document.getElementById('stopTime').value='';
     state.selectedPlace = null;
     resetTransportSelection();
@@ -1338,7 +1345,7 @@
   });
 
   // =========================================================================
-  // 🔥 파이어베이스 저장 및 공유 
+  // 🔥 파이어베이스 저장 및 공유
   // =========================================================================
   function genCode(){
     var chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1351,9 +1358,9 @@
     var payload = { title: state.title, stops: state.stops, savedAt: Date.now() };
     return db.ref('trips/' + code).set(payload)
       .then(function() { return true; })
-      .catch(function(error) { 
-        console.error("Firebase 저장 에러:", error); 
-        return false; 
+      .catch(function(error) {
+        console.error("Firebase 저장 에러:", error);
+        return false;
       });
   }
 
@@ -1370,38 +1377,6 @@
         console.error("Firebase 불러오기 에러:", error);
         return null;
       });
-  }
-
-  function rememberMyTrip(code, title){
-    try {
-      var list = JSON.parse(localStorage.getItem('my-trips') || '[]');
-      list.unshift({code:code, title:title, savedAt:Date.now()});
-      list = list.slice(0, 20); 
-      localStorage.setItem('my-trips', JSON.stringify(list));
-      return Promise.resolve(true);
-    } catch(e) { 
-      return Promise.resolve(false); 
-    }
-  }
-
-  function loadRecentTrips(){
-    try {
-      var list = JSON.parse(localStorage.getItem('my-trips') || '[]');
-      if(!list.length) return;
-      
-      var wrap = document.getElementById('recentWrap');
-      var el = document.getElementById('recentList');
-      wrap.style.display = 'block';
-      el.innerHTML = list.map(function(item){
-        return '<div class="recent-item"><span>'+escapeHtml(item.title||'제목 없음')+' <span class="recent-code">'+item.code+'</span></span><button data-code="'+item.code+'">불러오기</button></div>';
-      }).join('');
-      
-      Array.prototype.forEach.call(el.querySelectorAll('[data-code]'), function(btn){
-        btn.addEventListener('click', function(){
-          openLoadModal(btn.getAttribute('data-code'));
-        });
-      });
-    } catch(e) { console.error('loadRecentTrips failed', e); }
   }
 
   function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
@@ -1428,7 +1403,6 @@
       var code = genCode();
       saveTrip(code).then(function(res){
         if(!res){ status.textContent='저장에 실패했어요.'; return; }
-        rememberMyTrip(code, state.title);
         var link = location.origin + location.pathname + '?code=' + code;
         var body = document.getElementById('shareBody');
         body.innerHTML =
@@ -1438,7 +1412,6 @@
         document.getElementById('copyCode').addEventListener('click', function(){ copyText(code, this); });
         document.getElementById('copyLink').addEventListener('click', function(){ copyText(link, this); });
         status.textContent='';
-        loadRecentTrips(); // 저장 후 목록 바로 새로고침
       });
     });
   }
@@ -1502,7 +1475,6 @@
 
   // 초기 실행
   initMap();
-  loadRecentTrips(); // 최근 저장된 여행 로드
   renderAll();
 
   var urlCode = new URLSearchParams(location.search).get('code');
