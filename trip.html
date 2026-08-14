@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>BeTravel - 나의 여행 일정</title>
+<title>Trip - 나의 여행 일정</title>
 <style>
   :root{
     --paper:#F2F2F7;
@@ -645,7 +645,7 @@
         <!-- 1단계: 장소 설정 파트 -->
         <h3>1단계: 방문할 장소 및 시간 설정</h3>
         <div class="field" id="searchField">
-          <label>장소 명칭 검색 (카카오 API)</label>
+          <label>장소 검색</label>
           <input type="text" id="placeSearch" placeholder="예: 경복궁, 서울역 등 검색" autocomplete="off" />
           <div class="search-results" id="searchResults" style="display:none;"></div>
           <div class="selected-place" id="selectedPlace" style="display:none;"></div>
@@ -655,11 +655,11 @@
         </div>
         <div class="row2">
           <div class="field">
-            <label>날짜 (일차 자동 구분)</label>
+            <label>날짜</label>
             <input type="date" id="stopDate" />
           </div>
           <div class="field" id="firstArrivalField">
-            <label>출발/도착 시간 (일차별 첫 장소 필수)</label>
+            <label>출발/도착 시간</label>
             <input type="time" id="stopTime" />
           </div>
         </div>
@@ -682,7 +682,7 @@
         <div id="transportSection" style="display:none;">
           <h3 style="margin-top: 24px;">2단계: 이전 장소에서 여기까지 이동</h3>
           <div class="field">
-            <label>이동 수단 선택 (예상 시간 자동 계산)</label>
+            <label>이동 수단 선택</label>
             <div class="transport-options" id="transportOptions">
               <div class="transport-empty">위치를 선택하면 이동 시간이 자동으로 계산돼요.</div>
             </div>
