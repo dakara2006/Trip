@@ -577,14 +577,14 @@
   }
   .modal-wrap{position:relative;}
 
-  /* 🔥 모바일 반응형 및 바텀 시트(Bottom Sheet) 기능 (지도 100% 반영) */
+  /* 🔥 모바일 반응형 및 바텀 시트(Bottom Sheet) 기능 */
   @media (max-width:860px){
     .board { justify-content: center; height: 58px; padding: 0; }
     .board-badge, .board-actions, .view-tag { display: none !important; }
     .trip-title-input { position: static; transform: none; width: 100%; font-size: 18px; text-align: center; }
 
     .layout{display:block; position:relative; height:calc(100vh - 58px); overflow:hidden;}
-    /* 🔥 지도가 모바일에서 화면 전체 높이(100%)를 덮도록 수정 */
+    /* 🔥 지도가 항상 화면 전체 높이(100%)를 채우도록 설정 */
     .map-wrap{position:absolute; inset:0; height:100%; z-index:1; width:100%;} 
     .legend{left:12px;right:12px;bottom:auto;top:12px;} 
     
@@ -716,7 +716,7 @@
 <!-- 카카오맵 API 로드 -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 
-<!-- 파이어베이스 라이브러리 -->
+<!-- 파이어베이스 추가 라이브러리 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -842,6 +842,24 @@
   }
   function dayColor(idx){ return DAY_COLORS[idx % DAY_COLORS.length]; }
 
+  // 🔥 마커를 가시 영역 중앙(위쪽)에 맞추기 위한 Offset 계산 함수
+  function getOffsetCenter(coords) {
+    if (window.innerWidth <= 860) {
+      var sidebar = document.getElementById('mobileSidebar');
+      if (sidebar && !sidebar.classList.contains('collapsed')) {
+        var proj = map.getProjection();
+        if(proj) {
+          var point = proj.pointFromCoords(coords);
+          var mapHeight = document.getElementById('map').offsetHeight;
+          // 중심을 화면의 약 25% 만큼 아래로 당겨서, 실제 마커는 위쪽 빈 공간에 보이게 처리
+          point.y += (mapHeight * 0.25); 
+          return proj.coordsFromPoint(point);
+        }
+      }
+    }
+    return coords;
+  }
+
   // ---------- 카카오 맵 초기화 ----------
   function initMap(){
     var mapContainer = document.getElementById('map');
@@ -909,7 +927,9 @@
     var coords = new kakao.maps.LatLng(lat, lng);
     state.tempMarker = new kakao.maps.Marker({ position: coords });
     state.tempMarker.setMap(map);
-    map.panTo(coords);
+    
+    var centerCoords = getOffsetCenter(coords);
+    map.panTo(centerCoords);
   }
 
   // ---------- 카카오 맵 렌더링 ----------
@@ -986,7 +1006,12 @@
     });
 
     if(hasStops && !state.viewMode){
-      map.setBounds(bounds);
+      // 🔥 바텀시트가 올라와 있을 때 지도 하단 패딩을 여유있게 주어 가려지지 않게 처리
+      var pb = 50;
+      if(window.innerWidth <= 860 && !document.getElementById('mobileSidebar').classList.contains('collapsed')) {
+        pb = document.getElementById('map').offsetHeight * 0.55 + 20;
+      }
+      map.setBounds(bounds, 50, 50, pb, 50);
     }
     renderLegend(groups);
   }
@@ -1095,7 +1120,6 @@
     el.innerHTML = html;
 
     if(!state.viewMode){
-      // 기존 삭제, 수정 버튼 이벤트 바인딩
       Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function(btn){
         btn.addEventListener('click', function(){
           var id = btn.getAttribute('data-remove');
@@ -1109,17 +1133,16 @@
         });
       });
 
-      // 🔥 SortableJS 솔리드 드래그 구현부
       if (typeof Sortable !== 'undefined') {
         var lists = el.querySelectorAll('.stop-list');
         Array.prototype.forEach.call(lists, function(listEl) {
           Sortable.create(listEl, {
             group: 'shared', 
             animation: 250,  
-            ghostClass: 'stop-item-ghost', // 고스트는 살짝 투명
-            dragClass: 'stop-item-drag', // 움직이는 원본은 투명도 1(불투명)로 유지
-            forceFallback: true, // HTML5 고스트 이미지 사용 안함(필수)
-            fallbackClass: 'stop-item-drag',
+            ghostClass: 'stop-item-ghost', 
+            dragClass: 'stop-item-drag',
+            forceFallback: true,        
+            fallbackClass: 'stop-item-drag', 
             fallbackOnBody: true,
             delay: 150, 
             delayOnTouchOnly: true,
@@ -1170,7 +1193,6 @@
               
               renderAll();
               
-              // 시간 재설정 모달 자동으로 띄우기
               setTimeout(function(){
                 var stopsOnDate = getStopsOnDate(newDate);
                 var movedLocalIdx = stopsOnDate.findIndex(function(s){ return s.id === movedItem.id; });
@@ -1369,12 +1391,13 @@
 
     if(map && current){
       var coords = new kakao.maps.LatLng(current.lat, current.lng);
+      var centerCoords = getOffsetCenter(coords);
       if(animate){
-        animateMapTravel(coords, 600, function(){
+        animateMapTravel(centerCoords, 600, function(){
           map.setLevel(4, { animate: true });
         });
       } else {
-        map.setCenter(coords);
+        map.setCenter(centerCoords);
         map.setLevel(4);
       }
     }
@@ -1776,6 +1799,8 @@
     for(var i = 1; i < stopsOnDate.length; i++){
       var prev = stopsOnDate[i-1];
       var s = stopsOnDate[i];
+      if(!s.transport) continue; 
+      
       if(s.transportMin != null){
         var departure = addMinutes(prev.time, prev.duration);
         s.time = addMinutes(departure, s.transportMin);
