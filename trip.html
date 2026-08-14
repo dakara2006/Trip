@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>BeTravel - 나의 여행 일정</title>
 <style>
   :root{
@@ -27,7 +27,7 @@
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;padding:0;height:100%;background:var(--paper);color:var(--ink);}
+  html,body{margin:0;padding:0;height:100%;background:var(--paper);color:var(--ink);overflow:hidden;}
   body{display:flex;flex-direction:column;min-height:100vh;}
   input,select,button,textarea{font-family:inherit;font-size:15px;}
   button{cursor:pointer;}
@@ -103,7 +103,7 @@
   }
 
   /* ===== Layout ===== */
-  .layout{display:flex;flex:1;min-height:0;}
+  .layout{display:flex;flex:1;min-height:0;position:relative;}
   .sidebar{
     width:400px;
     flex-shrink:0;
@@ -132,6 +132,9 @@
     pointer-events:none;
   }
   #map{position:absolute;inset:0;}
+
+  /* ===== Mobile Handle (Bottom Sheet) ===== */
+  .sidebar-handle-wrap{display:none;}
 
   .day-tabs{
     display:flex;
@@ -295,10 +298,10 @@
   .day-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .stop-list{list-style:none;margin:0;padding:0;}
   
-  /* 🔥 Drag & Drop 시각적 효과 (솔리드 블럭 애니메이션) */
   .stop-item{position:relative;padding-left:36px;padding-bottom:6px; cursor:grab;}
   .stop-item:active{cursor:grabbing;}
-  .stop-item.is-dragging{opacity:0.2;}
+  .stop-item.is-dragging{opacity:0.3;}
+  /* 드롭 위치 표시용 파란 선 */
   .stop-item::before {
     content:''; position:absolute; left:36px; right:0; height:3px; background:var(--blue); 
     opacity:0; pointer-events:none; z-index:10; transition:opacity 0.15s; border-radius:2px;
@@ -336,7 +339,7 @@
     padding:12px 14px;
     margin-bottom:6px;
     box-shadow:0 4px 20px rgba(0,0,0,.04);
-    pointer-events:none; /* 부드러운 드래그를 위해 영역 차단 */
+    pointer-events:none; 
   }
   .stop-card * { pointer-events:auto; }
 
@@ -429,7 +432,7 @@
     width:32px;height:32px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
     color:#fff;
-    font-weight:500; /* 기존 800에서 500으로 얇게 조정 */
+    font-weight:500; /* 숫자를 더 얇게 수정 */
     font-size:14.5px;
     line-height:1;
     box-shadow:0 4px 14px rgba(0,0,0,.28);
@@ -447,7 +450,7 @@
     100%{ box-shadow:0 4px 12px rgba(0,0,0,.25), 0 0 0 0 rgba(0,122,255,0); }
   }
 
-  /* ===== Storyboard (shared-trip playback) panel ===== */
+  /* ===== Storyboard panel ===== */
   .storyboard-panel{
     background:var(--card);
     border-radius:var(--radius-lg);
@@ -513,7 +516,7 @@
   }
   .day-transition-overlay.show .day-transition-text{transform:translateY(0) scale(1);}
 
-  /* ===== Recent Trips (iOS Card Style) ===== */
+  /* ===== Recent Trips ===== */
   .recent{margin-top:24px;}
   .recent h4{font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.02em;margin:0 0 12px;font-weight:700;}
   .recent-item{
@@ -529,7 +532,7 @@
   .recent-item button:hover{background:var(--fill-strong);}
   .recent-code{font-size:12.5px;color:var(--ink-soft);font-weight:600;margin-left:8px;}
 
-  /* ===== Modal (iOS alert / sheet style) ===== */
+  /* ===== Modal ===== */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(0,0,0,.35);
     -webkit-backdrop-filter:blur(2px);
@@ -568,12 +571,30 @@
   }
   .modal-wrap{position:relative;}
 
+  /* 🔥 모바일 반응형 및 바텀 시트(Bottom Sheet) 기능 */
   @media (max-width:860px){
-    .layout{flex-direction:column;}
-    .sidebar{width:100%;order:2;border-right:none;border-top:1px solid var(--line);max-height:56vh;}
-    .map-wrap{order:1;height:40vh;}
-    .board-actions{width:100%;}
-    .legend{left:12px;right:12px;}
+    .layout{display:block; position:relative; height:calc(100vh - 58px); overflow:hidden;}
+    .map-wrap{width:100%; height:100%; position:absolute; inset:0; z-index:1;}
+    .legend{left:12px;right:12px;bottom:auto;top:12px;} /* 범례 위치를 지도가 가려지지 않게 상단으로 이동 */
+    
+    .sidebar{
+      position:absolute; bottom:0; left:0; width:100%; height:75%;
+      border-radius:24px 24px 0 0; border-top:1px solid rgba(0,0,0,0.1);
+      box-shadow:0 -4px 24px rgba(0,0,0,.15);
+      transition:transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transform:translateY(0); /* 기본 확장 상태 */
+      z-index:100;
+    }
+    .sidebar.collapsed{
+      transform:translateY(calc(100% - 66px)); /* 핸들과 탭 일부만 남기고 숨김 */
+    }
+    .sidebar-handle-wrap{
+      display:flex; justify-content:center; align-items:center;
+      height:24px; padding-top:10px; padding-bottom:10px;
+      cursor:grab; touch-action:none;
+    }
+    .sidebar-handle{width:42px; height:5px; border-radius:3px; background:#C7C7CC;}
+    .day-tabs{margin-top:0;}
   }
   @media (max-width:520px){
     .board{flex-wrap:wrap;}
@@ -605,7 +626,18 @@
 </header>
 
 <div class="layout">
-  <aside class="sidebar">
+  <main class="map-wrap">
+    <div id="map"></div>
+    <div class="map-hint" id="mapHint" style="display:none;">📍 지도를 클릭해서 위치를 지정하세요</div>
+    <div class="legend" id="legend"></div>
+  </main>
+
+  <aside class="sidebar" id="mobileSidebar">
+    <!-- 모바일 바텀시트 핸들 -->
+    <div class="sidebar-handle-wrap" id="sidebarHandle">
+      <div class="sidebar-handle"></div>
+    </div>
+
     <div class="day-tabs" id="dayTabs"></div>
     <div class="panel-scroll">
 
@@ -677,12 +709,6 @@
       </div>
     </div>
   </aside>
-
-  <main class="map-wrap">
-    <div id="map"></div>
-    <div class="map-hint" id="mapHint" style="display:none;">📍 지도를 클릭해서 위치를 지정하세요</div>
-    <div class="legend" id="legend"></div>
-  </main>
 </div>
 
 <div id="modalRoot"></div>
@@ -695,7 +721,7 @@
 <!-- 카카오맵 API 로드 -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 
-<!-- 🔥 파이어베이스 라이브러리 -->
+<!-- 🔥 파이어베이스 추가 라이브러리 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -707,7 +733,7 @@
   // 🔥 파이어베이스 설정 및 초기화
   // =========================================================================
   var firebaseConfig = {
-    apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k", 
+    apiKey: "본인의_API_KEY", // <--- 실제 발급받은 키로 교체하세요!
     authDomain: "trip-df7f2.firebaseapp.com",
     databaseURL: "https://trip-df7f2-default-rtdb.firebaseio.com",
     projectId: "trip-df7f2",
@@ -790,7 +816,6 @@
   function estimateWalkMinutes(km){ return Math.max(1, Math.round(km / WALK_KMH * 60)); }
   function estimateCarMinutes(km){ return Math.max(1, Math.round(km / CAR_KMH * 60)); }
 
-  // 🔥 드래그로 섞은 순서를 유지하기 위해 날짜 정렬 시 '드래그된 순서(인덱스)'를 기준으로 삼음
   function sortStateStops(){
     var arr = state.stops.map(function(s, i){ return {s: s, i: i}; });
     arr.sort(function(a, b){
@@ -1072,7 +1097,6 @@
     el.innerHTML = html;
 
     if(!state.viewMode){
-      // 기존 삭제/수정 버튼 바인딩
       Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function(btn){
         btn.addEventListener('click', function(){
           var id = btn.getAttribute('data-remove');
@@ -1086,40 +1110,37 @@
         });
       });
 
-      // 🔥 드래그 앤 드롭 애니메이션 및 로직
+      // 🔥 실제 솔리드 블록처럼 움직이게 하는 드래그 앤 드롭 애니메이션
       var dragSrcEl = null;
       var dragClone = null;
       var items = el.querySelectorAll('.stop-item');
 
       Array.prototype.forEach.call(items, function(item) {
         item.addEventListener('dragstart', function(e) {
-          // 버튼 클릭시에는 드래그 방지
+          // 버튼들을 드래그할 땐 드래그 취소
           if(e.target.closest('.stop-remove') || e.target.closest('.stop-edit')) {
             e.preventDefault(); return;
           }
           dragSrcEl = this;
           e.dataTransfer.effectAllowed = 'move';
           
-          // 🔥 진짜 블럭처럼 솔리드하게 움직이게 하기 위한 클론 트릭
-          dragClone = this.cloneNode(true);
-          dragClone.style.width = this.offsetWidth + 'px';
+          // 오직 흰색 카드 부분만 클론하여 드래그 이미지로 설정
+          var cardEl = this.querySelector('.stop-card');
+          dragClone = cardEl.cloneNode(true);
+          dragClone.style.width = cardEl.offsetWidth + 'px';
           dragClone.style.position = 'absolute';
           dragClone.style.top = '-9999px';
           dragClone.style.left = '-9999px';
-          dragClone.style.backgroundColor = 'var(--paper)';
+          dragClone.style.backgroundColor = 'var(--card)';
           dragClone.style.opacity = '1';
-          dragClone.style.pointerEvents = 'none';
-          
-          // 클론에서 밑으로 연결되는 선은 제거해서 깔끔하게 보임
-          var connector = dragClone.querySelector('.stop-connector');
-          if(connector) connector.style.display = 'none';
+          dragClone.style.borderRadius = 'var(--radius-md)';
+          dragClone.style.boxShadow = '0 10px 30px rgba(0,0,0,0.15)'; 
           
           document.body.appendChild(dragClone);
           
-          var rect = this.getBoundingClientRect();
-          e.dataTransfer.setDragImage(dragClone, e.clientX - rect.left, e.clientY - rect.top);
+          // 마우스 포인터 중심에 카드가 오도록 조정
+          e.dataTransfer.setDragImage(dragClone, cardEl.offsetWidth / 2, cardEl.offsetHeight / 2);
           
-          // 원본은 빈 공간처럼 보이게 처리
           setTimeout(function(){ dragSrcEl.classList.add('is-dragging'); }, 0);
         });
 
@@ -1162,7 +1183,7 @@
     }
   }
 
-  // 🔥 2개 장소 순서 변경 버그 수정 핵심 로직
+  // 2개 장소 순서 변경 및 시간 재계산 버그 완벽 수정
   function moveStopOrder(srcId, targetId, insertAfter) {
     var srcIdx = state.stops.findIndex(function(s){ return s.id === srcId; });
     var targetIdx = state.stops.findIndex(function(s){ return s.id === targetId; });
@@ -1178,9 +1199,9 @@
     item.date = newDate;
     
     state.stops.splice(insertIdx, 0, item);
-    sortStateStops();
+    sortStateStops(); 
     
-    // 🔥 순서가 바뀌었으므로 각 날짜의 1번째 장소는 교통수단 정보 삭제 (꼬임 방지)
+    // 순서가 바뀌었으므로 각 날짜의 1번째 장소는 교통수단 정보를 비워야 꼬이지 않음
     var groups = groupByDay(state.stops);
     groups.forEach(function(g){
       if(g.stops.length > 0) {
@@ -1194,15 +1215,17 @@
     
     renderAll();
     
-    // 순서가 바뀌면 바뀐 아이템이나 그 뒤의 아이템이 이동 시간을 다시 설정하도록 수정창 자동 팝업
+    // 🔥 순서를 변경하면 방금 위치가 바뀐 요소들에 대해 
+    // "이전 장소로부터의 대중교통 시간"을 다시 설정하도록 모달을 강제 팝업
     setTimeout(function(){
       var stopsOnDate = getStopsOnDate(newDate);
       var movedIdx = stopsOnDate.findIndex(function(s){ return s.id === srcId; });
       
-      // 1번 자리로 이동했다면, 원래 1번이었던 장소(지금은 2번)의 교통수단을 다시 설정해야 함!
       if (movedIdx === 0 && stopsOnDate.length > 1) {
+        // 1번 자리로 새 장소가 올라왔다면, 기존 1번(지금 2번이 됨)의 교통수단을 새로 골라야 함
         openEditStopModal(stopsOnDate[1].id);
       } else {
+        // 다른 곳으로 끼어들었다면 그 장소(srcId)의 교통수단을 골라야 함
         openEditStopModal(srcId);
       }
     }, 300);
@@ -1255,6 +1278,60 @@
       renderMap();
     }
   }
+
+  // ---------- 모바일 바텀시트 터치 슬라이드 로직 ----------
+  var sidebar = document.getElementById('mobileSidebar');
+  var handle = document.getElementById('sidebarHandle');
+  var startY = 0;
+  var isDraggingSheet = false;
+
+  handle.addEventListener('touchstart', function(e){
+      if(window.innerWidth > 860) return;
+      startY = e.touches[0].clientY;
+      isDraggingSheet = true;
+      sidebar.style.transition = 'none'; // 드래그 중엔 애니메이션 끄기
+  }, {passive: true});
+
+  handle.addEventListener('touchmove', function(e){
+      if(!isDraggingSheet || window.innerWidth > 860) return;
+      var deltaY = e.touches[0].clientY - startY;
+      var isCollapsed = sidebar.classList.contains('collapsed');
+      
+      var maxCollapse = window.innerHeight * 0.75 - 66;
+      var baseTranslate = isCollapsed ? maxCollapse : 0;
+      var newTranslate = baseTranslate + deltaY;
+      
+      if(newTranslate < 0) newTranslate = 0; 
+      if(newTranslate > maxCollapse) newTranslate = maxCollapse;
+
+      sidebar.style.transform = 'translateY(' + newTranslate + 'px)';
+  }, {passive: true});
+
+  handle.addEventListener('touchend', function(e){
+      if(!isDraggingSheet || window.innerWidth > 860) return;
+      isDraggingSheet = false;
+      sidebar.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      
+      var transformStr = sidebar.style.transform;
+      var match = transformStr.match(/translateY\((.*)px\)/);
+      if(match) {
+          var currentTranslate = parseFloat(match[1]);
+          var maxCollapse = window.innerHeight * 0.75 - 66;
+          // 절반 이상 내리면 닫히고, 아니면 열림
+          if(currentTranslate > maxCollapse / 2) {
+              sidebar.classList.add('collapsed');
+          } else {
+              sidebar.classList.remove('collapsed');
+          }
+          sidebar.style.transform = ''; // 인라인 스타일 제거 (CSS 클래스에 맡김)
+      }
+  });
+  
+  handle.addEventListener('click', function(){
+      if(window.innerWidth > 860) return;
+      sidebar.classList.toggle('collapsed');
+  });
+
 
   // ---------- 스토리보드(공유 일정 재생) 모드 ----------
   function getStoryboardSteps(){
@@ -1739,13 +1816,14 @@
 
   function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
-  // 🔥 수정, 드래그 후 시간 재계산 버그 수정 로직
   function recomputeTimesForDate(date){
     sortStateStops();
     var stopsOnDate = getStopsOnDate(date);
     for(var i = 1; i < stopsOnDate.length; i++){
       var prev = stopsOnDate[i-1];
       var s = stopsOnDate[i];
+      if(!s.transport) continue; 
+      
       if(s.transportMin != null){
         var departure = addMinutes(prev.time, prev.duration);
         s.time = addMinutes(departure, s.transportMin);
