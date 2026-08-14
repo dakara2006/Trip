@@ -295,11 +295,17 @@
   .day-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .stop-list{list-style:none;margin:0;padding:0;}
   
-  /* Drag & Drop 시 시각적 효과를 위해 transition 추가 */
-  .stop-item{position:relative;padding-left:36px;padding-bottom:6px; cursor:grab; transition: opacity 0.2s;}
+  /* 🔥 Drag & Drop 시각적 효과 (솔리드 블럭 애니메이션) */
+  .stop-item{position:relative;padding-left:36px;padding-bottom:6px; cursor:grab;}
   .stop-item:active{cursor:grabbing;}
-  .stop-item.drag-over{border-top: 2px solid var(--blue);}
-  
+  .stop-item.is-dragging{opacity:0.2;}
+  .stop-item::before {
+    content:''; position:absolute; left:36px; right:0; height:3px; background:var(--blue); 
+    opacity:0; pointer-events:none; z-index:10; transition:opacity 0.15s; border-radius:2px;
+  }
+  .stop-item.drag-over-top::before{top:-1px; opacity:1;}
+  .stop-item.drag-over-bottom::before{bottom:4px; opacity:1;}
+
   .stop-node{
     position:absolute;left:0;top:8px;
     width:26px;height:26px;
@@ -330,9 +336,9 @@
     padding:12px 14px;
     margin-bottom:6px;
     box-shadow:0 4px 20px rgba(0,0,0,.04);
-    pointer-events:none; /* Drag & Drop 방해 방지 */
+    pointer-events:none; /* 부드러운 드래그를 위해 영역 차단 */
   }
-  .stop-card * { pointer-events:auto; } /* 내부 요소는 클릭 가능하게 */
+  .stop-card * { pointer-events:auto; }
 
   .stop-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
   .stop-name{font-weight:700;font-size:14.5px;letter-spacing:-.01em;}
@@ -418,18 +424,20 @@
   .legend-swatch.mode-walk{background:repeating-linear-gradient(to right,var(--walk) 0 4px,transparent 4px 8px);}
   .legend-swatch.mode-car{background:repeating-linear-gradient(to right,var(--car) 0 6px,transparent 6px 10px);}
 
+  /* 🔥 지도 마커 디자인 변경 (숫자 얇게) */
   .trip-marker{
     width:32px;height:32px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
     color:#fff;
-    font-weight:500; /* 숫자를 더 얇게 수정 */
-    font-size:14px;
+    font-weight:500; /* 기존 800에서 500으로 얇게 조정 */
+    font-size:14.5px;
     line-height:1;
     box-shadow:0 4px 14px rgba(0,0,0,.28);
+    border:2.5px solid #fff;
   }
   .trip-marker.current{
     width:42px;height:42px;
-    font-size:16px;
+    font-size:18px;
     z-index:999;
     animation:markerPulse 1.6s ease-in-out infinite;
   }
@@ -687,7 +695,7 @@
 <!-- 카카오맵 API 로드 -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 
-<!-- 🔥 파이어베이스 추가 라이브러리 -->
+<!-- 🔥 파이어베이스 라이브러리 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -697,7 +705,6 @@
 
   // =========================================================================
   // 🔥 파이어베이스 설정 및 초기화
-  // 파이어베이스 콘솔에서 본인의 앱 정보로 아래 내용을 교체해주세요!
   // =========================================================================
   var firebaseConfig = {
     apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k", 
@@ -783,13 +790,13 @@
   function estimateWalkMinutes(km){ return Math.max(1, Math.round(km / WALK_KMH * 60)); }
   function estimateCarMinutes(km){ return Math.max(1, Math.round(km / CAR_KMH * 60)); }
 
-  // 🔥 사용자가 만든 순서를 그대로 유지하기 위해 '시간' 정렬을 없애고 '날짜' 기준으로만 그룹화
+  // 🔥 드래그로 섞은 순서를 유지하기 위해 날짜 정렬 시 '드래그된 순서(인덱스)'를 기준으로 삼음
   function sortStateStops(){
     var arr = state.stops.map(function(s, i){ return {s: s, i: i}; });
     arr.sort(function(a, b){
       if(a.s.date < b.s.date) return -1;
       if(a.s.date > b.s.date) return 1;
-      return a.i - b.i; // 날짜가 같으면 사용자가 드래그한 순서 그대로 유지
+      return a.i - b.i; 
     });
     state.stops = arr.map(function(x){ return x.s; });
     return state.stops;
@@ -1025,7 +1032,6 @@
       html += '<div class="day-heading"><span class="day-dot" style="background:'+color+'"></span>'+(globalIdx+1)+'일차 ('+fmtDate(g.key==='__nodate__'?null:g.key)+')</div>';
       html += '<ul class="stop-list">';
       
-      // Drag & Drop 부여
       g.stops.forEach(function(s, i){
         var isLast = i===g.stops.length-1;
         html += '<li class="stop-item" draggable="true" data-id="'+s.id+'">';
@@ -1054,7 +1060,7 @@
 
           html += '<div class="transit-note">';
           html += '<div class="transit-info"><span class="mode-badge mode-'+mode2+'">'+MODE_LABEL[mode2]+'</span>';
-          if(next.transportMin) html += '<span>약 '+next.transportMin+'분 이동</span>';
+          if(next.transportMin != null) html += '<span>약 '+next.transportMin+'분 이동</span>';
           html += '</div>';
           html += '<a href="'+kakaoMapRouteUrl+'" target="_blank" class="map-link-btn">길찾기 ↗</a>';
           html += '</div>';
@@ -1066,7 +1072,7 @@
     el.innerHTML = html;
 
     if(!state.viewMode){
-      // 기존 버튼 이벤트
+      // 기존 삭제/수정 버튼 바인딩
       Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function(btn){
         btn.addEventListener('click', function(){
           var id = btn.getAttribute('data-remove');
@@ -1080,48 +1086,74 @@
         });
       });
 
-      // 🔥 Drag & Drop 이벤트 바인딩
+      // 🔥 드래그 앤 드롭 애니메이션 및 로직
       var dragSrcEl = null;
+      var dragClone = null;
       var items = el.querySelectorAll('.stop-item');
+
       Array.prototype.forEach.call(items, function(item) {
         item.addEventListener('dragstart', function(e) {
+          // 버튼 클릭시에는 드래그 방지
+          if(e.target.closest('.stop-remove') || e.target.closest('.stop-edit')) {
+            e.preventDefault(); return;
+          }
           dragSrcEl = this;
           e.dataTransfer.effectAllowed = 'move';
-          this.style.opacity = '0.4';
+          
+          // 🔥 진짜 블럭처럼 솔리드하게 움직이게 하기 위한 클론 트릭
+          dragClone = this.cloneNode(true);
+          dragClone.style.width = this.offsetWidth + 'px';
+          dragClone.style.position = 'absolute';
+          dragClone.style.top = '-9999px';
+          dragClone.style.left = '-9999px';
+          dragClone.style.backgroundColor = 'var(--paper)';
+          dragClone.style.opacity = '1';
+          dragClone.style.pointerEvents = 'none';
+          
+          // 클론에서 밑으로 연결되는 선은 제거해서 깔끔하게 보임
+          var connector = dragClone.querySelector('.stop-connector');
+          if(connector) connector.style.display = 'none';
+          
+          document.body.appendChild(dragClone);
+          
+          var rect = this.getBoundingClientRect();
+          e.dataTransfer.setDragImage(dragClone, e.clientX - rect.left, e.clientY - rect.top);
+          
+          // 원본은 빈 공간처럼 보이게 처리
+          setTimeout(function(){ dragSrcEl.classList.add('is-dragging'); }, 0);
         });
+
         item.addEventListener('dragover', function(e) {
-          if (e.preventDefault) { e.preventDefault(); }
+          e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
           var rect = this.getBoundingClientRect();
           var mid = rect.top + rect.height/2;
-          if(e.clientY < mid) {
-            this.style.borderTop = '2px solid var(--blue)';
-            this.style.borderBottom = '';
-          } else {
-            this.style.borderTop = '';
-            this.style.borderBottom = '2px solid var(--blue)';
-          }
-          return false;
+          
+          this.classList.remove('drag-over-top', 'drag-over-bottom');
+          if(e.clientY < mid) this.classList.add('drag-over-top');
+          else this.classList.add('drag-over-bottom');
         });
+
         item.addEventListener('dragleave', function(e) {
-          this.style.borderTop = '';
-          this.style.borderBottom = '';
+          this.classList.remove('drag-over-top', 'drag-over-bottom');
         });
+
         item.addEventListener('dragend', function(e) {
-          this.style.opacity = '1';
+          if(dragSrcEl) dragSrcEl.classList.remove('is-dragging');
+          if(dragClone && dragClone.parentNode) dragClone.parentNode.removeChild(dragClone);
           Array.prototype.forEach.call(items, function(i) {
-            i.style.borderTop = ''; i.style.borderBottom = '';
+            i.classList.remove('drag-over-top', 'drag-over-bottom');
           });
         });
+
         item.addEventListener('drop', function(e) {
-          if (e.stopPropagation) { e.stopPropagation(); }
-          this.style.borderTop = ''; this.style.borderBottom = '';
+          e.stopPropagation();
+          this.classList.remove('drag-over-top', 'drag-over-bottom');
           if (dragSrcEl !== this) {
             var srcId = dragSrcEl.getAttribute('data-id');
             var targetId = this.getAttribute('data-id');
             var rect = this.getBoundingClientRect();
-            var mid = rect.top + rect.height/2;
-            var insertAfter = e.clientY >= mid;
+            var insertAfter = e.clientY >= (rect.top + rect.height/2);
             moveStopOrder(srcId, targetId, insertAfter);
           }
           return false;
@@ -1130,28 +1162,49 @@
     }
   }
 
-  // 드래그 앤 드롭으로 순서 변경 시 호출
+  // 🔥 2개 장소 순서 변경 버그 수정 핵심 로직
   function moveStopOrder(srcId, targetId, insertAfter) {
     var srcIdx = state.stops.findIndex(function(s){ return s.id === srcId; });
     var targetIdx = state.stops.findIndex(function(s){ return s.id === targetId; });
     if(srcIdx < 0 || targetIdx < 0) return;
 
     var item = state.stops.splice(srcIdx, 1)[0];
-    // splice로 배열이 변했으므로 targetIdx 다시 찾기
+    var oldDate = item.date;
+
     targetIdx = state.stops.findIndex(function(s){ return s.id === targetId; });
     var insertIdx = insertAfter ? targetIdx + 1 : targetIdx;
     
-    // 타겟이 있는 일차(Date)로 날짜를 동기화시킴
-    item.date = state.stops[targetIdx].date;
+    var newDate = state.stops[targetIdx].date;
+    item.date = newDate;
     
     state.stops.splice(insertIdx, 0, item);
-    sortStateStops(); // 날짜가 섞이지 않도록 정렬 확정
+    sortStateStops();
+    
+    // 🔥 순서가 바뀌었으므로 각 날짜의 1번째 장소는 교통수단 정보 삭제 (꼬임 방지)
+    var groups = groupByDay(state.stops);
+    groups.forEach(function(g){
+      if(g.stops.length > 0) {
+        g.stops[0].transport = null;
+        g.stops[0].transportMin = null;
+      }
+    });
 
+    if (oldDate !== newDate) recomputeTimesForDate(oldDate);
+    recomputeTimesForDate(newDate);
+    
     renderAll();
     
-    // 위치가 바뀐 아이템에 대해 이동 시간 재설정 모달을 자동으로 띄움
+    // 순서가 바뀌면 바뀐 아이템이나 그 뒤의 아이템이 이동 시간을 다시 설정하도록 수정창 자동 팝업
     setTimeout(function(){
-      openEditStopModal(srcId);
+      var stopsOnDate = getStopsOnDate(newDate);
+      var movedIdx = stopsOnDate.findIndex(function(s){ return s.id === srcId; });
+      
+      // 1번 자리로 이동했다면, 원래 1번이었던 장소(지금은 2번)의 교통수단을 다시 설정해야 함!
+      if (movedIdx === 0 && stopsOnDate.length > 1) {
+        openEditStopModal(stopsOnDate[1].id);
+      } else {
+        openEditStopModal(srcId);
+      }
     }, 300);
   }
 
@@ -1246,7 +1299,7 @@
       var mode = current.transport || 'walk';
       html += '<div class="storyboard-transit">';
       html += '<span class="mode-badge mode-'+mode+'">'+MODE_LABEL[mode]+'</span>';
-      if(current.transportMin) html += '<span>'+current.transportMin+'분 이동</span>';
+      if(current.transportMin != null) html += '<span>'+current.transportMin+'분 이동</span>';
       html += '</div>';
     }
 
@@ -1686,15 +1739,13 @@
 
   function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
-  // 🔥 드래그앤드롭 및 수정 시 해당 날짜의 시간들만 연쇄적으로 다시 계산
+  // 🔥 수정, 드래그 후 시간 재계산 버그 수정 로직
   function recomputeTimesForDate(date){
     sortStateStops();
     var stopsOnDate = getStopsOnDate(date);
     for(var i = 1; i < stopsOnDate.length; i++){
       var prev = stopsOnDate[i-1];
       var s = stopsOnDate[i];
-      if(!s.transport) continue; 
-      
       if(s.transportMin != null){
         var departure = addMinutes(prev.time, prev.duration);
         s.time = addMinutes(departure, s.transportMin);
@@ -1702,7 +1753,6 @@
     }
   }
 
-  // 🔥 모달 창에서 수정 및 "대중교통 재설정" 기능 추가
   var tempEditTransport = null;
   function openEditStopModal(stopId){
     var idx = state.stops.findIndex(function(s){ return s.id === stopId; });
@@ -1724,7 +1774,7 @@
 
     if(prev) {
       html += '<div class="field"><label>이전 장소('+escapeHtml(prev.name)+')로부터 이동 수단 재설정</label>';
-      html += '<div class="transport-options" id="editTransportOptions">계산 중...</div></div>';
+      html += '<div class="transport-options" id="editTransportOptions">대중교통 시간을 불러오는 중...</div></div>';
     }
 
     html += '<div class="modal-field"><label>머무는 시간 (분)</label><input type="number" id="editDuration" min="0" step="5" value="'+stop.duration+'"></div>' +
@@ -1757,7 +1807,7 @@
       stop.duration = parseInt(document.getElementById('editDuration').value, 10) || 0;
       stop.note = document.getElementById('editNote').value.trim();
       
-      if(prev && tempEditTransport) {
+      if(prev && tempEditTransport && tempEditTransport.mode) {
         stop.transport = tempEditTransport.mode;
         stop.transportMin = tempEditTransport.minutes;
       }
@@ -1768,7 +1818,6 @@
     });
   }
 
-  // 모달창 내부용 ODsay 교통수단 불러오기 로직
   function loadEditTransportOptions(fromLat, fromLng, toLat, toLng, currentMode){
     var km = haversineKm(fromLat, fromLng, toLat, toLng);
     var walkMin = estimateWalkMinutes(km);
