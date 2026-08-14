@@ -294,7 +294,12 @@
   }
   .day-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .stop-list{list-style:none;margin:0;padding:0;}
-  .stop-item{position:relative;padding-left:36px;padding-bottom:6px;}
+  
+  /* Drag & Drop 시 시각적 효과를 위해 transition 추가 */
+  .stop-item{position:relative;padding-left:36px;padding-bottom:6px; cursor:grab; transition: opacity 0.2s;}
+  .stop-item:active{cursor:grabbing;}
+  .stop-item.drag-over{border-top: 2px solid var(--blue);}
+  
   .stop-node{
     position:absolute;left:0;top:8px;
     width:26px;height:26px;
@@ -311,11 +316,13 @@
     width:1.5px;
     border-radius:2px;
     opacity:.55;
+    pointer-events:none;
   }
   .stop-connector.mode-subway{background:var(--subway);}
   .stop-connector.mode-bus{background:var(--bus);}
   .stop-connector.mode-walk{background:repeating-linear-gradient(to bottom,var(--walk) 0 4px,transparent 4px 8px);}
   .stop-connector.mode-car{background:repeating-linear-gradient(to bottom,var(--car) 0 6px,transparent 6px 10px);}
+  
   .stop-card{
     background:var(--card);
     border:none;
@@ -323,7 +330,10 @@
     padding:12px 14px;
     margin-bottom:6px;
     box-shadow:0 4px 20px rgba(0,0,0,.04);
+    pointer-events:none; /* Drag & Drop 방해 방지 */
   }
+  .stop-card * { pointer-events:auto; } /* 내부 요소는 클릭 가능하게 */
+
   .stop-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
   .stop-name{font-weight:700;font-size:14.5px;letter-spacing:-.01em;}
   .stop-addr{font-size:12px;color:var(--ink-soft);margin-top:2px;}
@@ -411,7 +421,9 @@
   .trip-marker{
     width:32px;height:32px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
-    color:#fff;font-weight:800;font-size:13px;
+    color:#fff;
+    font-weight:500; /* 숫자를 더 얇게 수정 */
+    font-size:14px;
     line-height:1;
     box-shadow:0 4px 14px rgba(0,0,0,.28);
   }
@@ -626,7 +638,7 @@
           <input type="text" id="stopNote" placeholder="이 장소에 대한 메모를 남겨보세요" />
         </div>
 
-        <!-- 2단계: 이동 설정 파트 (동일 날짜의 두 번째 장소부터 자동 표시) -->
+        <!-- 2단계: 이동 설정 파트 -->
         <div id="transportSection" style="display:none;">
           <h3 style="margin-top: 24px;">2단계: 이전 장소에서 여기까지 이동</h3>
           <div class="field">
@@ -688,7 +700,7 @@
   // 파이어베이스 콘솔에서 본인의 앱 정보로 아래 내용을 교체해주세요!
   // =========================================================================
   var firebaseConfig = {
-    apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k", // 본인의 키로 교체 필요
+    apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k", 
     authDomain: "trip-df7f2.firebaseapp.com",
     databaseURL: "https://trip-df7f2-default-rtdb.firebaseio.com",
     projectId: "trip-df7f2",
@@ -722,7 +734,7 @@
     activeDay: 'all',
     viewMode: false,
     currentStep: 0,
-    lastStoryboardDay: -1, // 화면 전환 애니메이션을 위한 트래커
+    lastStoryboardDay: -1,
     selectedPlace: null,
     selectedTransport: null,
     pendingPick: false,
@@ -730,7 +742,7 @@
   };
 
   var map, ps, markers = [], polylines = [];
-  var transitionTimer = null; // 오버레이 타이머
+  var transitionTimer = null; 
 
   // ---------- utils ----------
   function uid(){ return Math.random().toString(36).slice(2,9); }
@@ -771,16 +783,18 @@
   function estimateWalkMinutes(km){ return Math.max(1, Math.round(km / WALK_KMH * 60)); }
   function estimateCarMinutes(km){ return Math.max(1, Math.round(km / CAR_KMH * 60)); }
 
-  // 🔥 데이터를 날짜+시간 순으로 항상 정렬시키는 핵심 함수
+  // 🔥 사용자가 만든 순서를 그대로 유지하기 위해 '시간' 정렬을 없애고 '날짜' 기준으로만 그룹화
   function sortStateStops(){
-    state.stops.sort(function(a,b){
-      var ka=(a.date||'9999')+a.time, kb=(b.date||'9999')+b.time;
-      return ka<kb?-1:ka>kb?1:0;
+    var arr = state.stops.map(function(s, i){ return {s: s, i: i}; });
+    arr.sort(function(a, b){
+      if(a.s.date < b.s.date) return -1;
+      if(a.s.date > b.s.date) return 1;
+      return a.i - b.i; // 날짜가 같으면 사용자가 드래그한 순서 그대로 유지
     });
+    state.stops = arr.map(function(x){ return x.s; });
     return state.stops;
   }
   
-  // 선택한 날짜에 해당하는 장소들만 필터링해서 가져오는 함수 (버그 해결 핵심)
   function getStopsOnDate(date){
     sortStateStops();
     return state.stops.filter(function(s){ return s.date === date; });
@@ -908,7 +922,7 @@
         coordsList.push(coords);
 
         var isCurrent = highlightId && s.id === highlightId;
-        if(state.viewMode && !isCurrent) return; // 뷰 모드에선 현재 마커만 표시
+        if(state.viewMode && !isCurrent) return; 
 
         var markerClass = 'trip-marker' + (isCurrent ? ' current' : '');
         var content = '<div class="'+markerClass+'" style="background:'+color+'">'+(i+1)+'</div>';
@@ -924,7 +938,6 @@
         markers.push(customOverlay);
       });
 
-      // 동일 일차(Day) 내에서만 선 그리기
       for(var i = 0; i < coordsList.length - 1; i++){
         var next = g.stops[i+1];
         var mode = next.transport || 'walk';
@@ -981,13 +994,11 @@
     });
     el.innerHTML = html;
     
-    // 날짜 탭 클릭 시, 현재 폼의 날짜도 동기화 시켜줌 (버그 수정 핵심)
     Array.prototype.forEach.call(el.querySelectorAll('.day-tab'), function(t){
       t.addEventListener('click', function(){ 
         state.activeDay = t.getAttribute('data-day'); 
         if(state.activeDay !== 'all') {
             document.getElementById('stopDate').value = state.activeDay;
-            // 강제로 change 이벤트 발생시켜서 폼 상태 갱신
             var evt = new Event('change');
             document.getElementById('stopDate').dispatchEvent(evt);
         }
@@ -1013,9 +1024,11 @@
       html += '<div class="day-group">';
       html += '<div class="day-heading"><span class="day-dot" style="background:'+color+'"></span>'+(globalIdx+1)+'일차 ('+fmtDate(g.key==='__nodate__'?null:g.key)+')</div>';
       html += '<ul class="stop-list">';
+      
+      // Drag & Drop 부여
       g.stops.forEach(function(s, i){
         var isLast = i===g.stops.length-1;
-        html += '<li class="stop-item">';
+        html += '<li class="stop-item" draggable="true" data-id="'+s.id+'">';
         html += '<div class="stop-node" style="background:'+color+'">'+(i+1)+'</div>';
 
         if(!isLast){
@@ -1053,6 +1066,7 @@
     el.innerHTML = html;
 
     if(!state.viewMode){
+      // 기존 버튼 이벤트
       Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function(btn){
         btn.addEventListener('click', function(){
           var id = btn.getAttribute('data-remove');
@@ -1065,7 +1079,80 @@
           openEditStopModal(btn.getAttribute('data-edit'));
         });
       });
+
+      // 🔥 Drag & Drop 이벤트 바인딩
+      var dragSrcEl = null;
+      var items = el.querySelectorAll('.stop-item');
+      Array.prototype.forEach.call(items, function(item) {
+        item.addEventListener('dragstart', function(e) {
+          dragSrcEl = this;
+          e.dataTransfer.effectAllowed = 'move';
+          this.style.opacity = '0.4';
+        });
+        item.addEventListener('dragover', function(e) {
+          if (e.preventDefault) { e.preventDefault(); }
+          e.dataTransfer.dropEffect = 'move';
+          var rect = this.getBoundingClientRect();
+          var mid = rect.top + rect.height/2;
+          if(e.clientY < mid) {
+            this.style.borderTop = '2px solid var(--blue)';
+            this.style.borderBottom = '';
+          } else {
+            this.style.borderTop = '';
+            this.style.borderBottom = '2px solid var(--blue)';
+          }
+          return false;
+        });
+        item.addEventListener('dragleave', function(e) {
+          this.style.borderTop = '';
+          this.style.borderBottom = '';
+        });
+        item.addEventListener('dragend', function(e) {
+          this.style.opacity = '1';
+          Array.prototype.forEach.call(items, function(i) {
+            i.style.borderTop = ''; i.style.borderBottom = '';
+          });
+        });
+        item.addEventListener('drop', function(e) {
+          if (e.stopPropagation) { e.stopPropagation(); }
+          this.style.borderTop = ''; this.style.borderBottom = '';
+          if (dragSrcEl !== this) {
+            var srcId = dragSrcEl.getAttribute('data-id');
+            var targetId = this.getAttribute('data-id');
+            var rect = this.getBoundingClientRect();
+            var mid = rect.top + rect.height/2;
+            var insertAfter = e.clientY >= mid;
+            moveStopOrder(srcId, targetId, insertAfter);
+          }
+          return false;
+        });
+      });
     }
+  }
+
+  // 드래그 앤 드롭으로 순서 변경 시 호출
+  function moveStopOrder(srcId, targetId, insertAfter) {
+    var srcIdx = state.stops.findIndex(function(s){ return s.id === srcId; });
+    var targetIdx = state.stops.findIndex(function(s){ return s.id === targetId; });
+    if(srcIdx < 0 || targetIdx < 0) return;
+
+    var item = state.stops.splice(srcIdx, 1)[0];
+    // splice로 배열이 변했으므로 targetIdx 다시 찾기
+    targetIdx = state.stops.findIndex(function(s){ return s.id === targetId; });
+    var insertIdx = insertAfter ? targetIdx + 1 : targetIdx;
+    
+    // 타겟이 있는 일차(Date)로 날짜를 동기화시킴
+    item.date = state.stops[targetIdx].date;
+    
+    state.stops.splice(insertIdx, 0, item);
+    sortStateStops(); // 날짜가 섞이지 않도록 정렬 확정
+
+    renderAll();
+    
+    // 위치가 바뀐 아이템에 대해 이동 시간 재설정 모달을 자동으로 띄움
+    setTimeout(function(){
+      openEditStopModal(srcId);
+    }, 300);
   }
 
   function escapeHtml(str){
@@ -1074,7 +1161,6 @@
     });
   }
 
-  // 1단계(장소/출발시간) vs 2단계(이동수단) 폼 화면 자동 전환 로직
   function updateTransportFormVisibility() {
     var ts = document.getElementById('transportSection');
     var firstField = document.getElementById('firstArrivalField');
@@ -1102,7 +1188,7 @@
       document.getElementById('timeline').style.display = 'none';
       document.getElementById('storyboard').style.display = 'flex';
       if(state.stops.length){
-        renderStoryboard(false, true); // 초기 로드시 애니메이션 없이 렌더링
+        renderStoryboard(false, true); 
       } else {
         document.getElementById('storyboard').innerHTML = '<div class="empty-state">표시할 장소가 없어요.</div>';
         renderMap();
@@ -1122,7 +1208,6 @@
     return sortStateStops();
   }
 
-  // 일차 전환 풀스크린 애니메이션 실행 함수
   function playDayTransition(dayNum) {
     var ov = document.getElementById('dayTransitionOverlay');
     var txt = document.getElementById('dayTransitionText');
@@ -1133,7 +1218,7 @@
     
     transitionTimer = setTimeout(function(){
       ov.classList.remove('show');
-    }, 1600); // 1.6초간 유지 후 페이드아웃
+    }, 1600); 
   }
 
   function renderStoryboard(animate, checkTransition){
@@ -1146,12 +1231,10 @@
     var idx = state.currentStep;
     var current = steps[idx];
 
-    // 현재 보고 있는 장소가 몇 일차인지 계산
     var uniqueDates = [];
     steps.forEach(function(s){ if(uniqueDates.indexOf(s.date) === -1) uniqueDates.push(s.date); });
     var currentDayNum = uniqueDates.indexOf(current.date) + 1;
 
-    // 새로운 일차로 넘어갔다면 애니메이션 트리거
     if(checkTransition && state.lastStoryboardDay !== currentDayNum) {
       state.lastStoryboardDay = currentDayNum;
       playDayTransition(currentDayNum);
@@ -1159,7 +1242,6 @@
 
     var html = '';
 
-    // 첫 장소가 아니면서 transport 정보가 있을 때만 이동 수단 표시 (일차 첫 시작이면 안 띄움)
     if(idx > 0 && current.transport){
       var mode = current.transport || 'walk';
       html += '<div class="storyboard-transit">';
@@ -1349,7 +1431,6 @@
 
   document.getElementById('stopTime').addEventListener('input', updateAddBtn);
   
-  // 날짜가 변경되면 즉시 폼 가시성을 업데이트
   document.getElementById('stopDate').addEventListener('change', function(){
     updateTransportFormVisibility();
     var selectedDate = document.getElementById('stopDate').value;
@@ -1405,7 +1486,7 @@
     var stopsOnDate = getStopsOnDate(selectedDate);
     if(stopsOnDate.length === 0) return;
 
-    var last = stopsOnDate[stopsOnDate.length - 1]; // 선택된 날짜의 가장 마지막 장소
+    var last = stopsOnDate[stopsOnDate.length - 1]; 
     var km = haversineKm(last.lat, last.lng, toLat, toLng);
     var walkMin = estimateWalkMinutes(km);
     var carMin = estimateCarMinutes(km);
@@ -1511,7 +1592,7 @@
     };
     
     state.stops.push(stop);
-    sortStateStops(); // 새로 넣은 후 전체 재정렬하여 순서 꼬임 방지
+    sortStateStops(); 
 
     document.getElementById('placeSearch').value='';
     document.getElementById('selectedPlace').style.display='none';
@@ -1605,7 +1686,7 @@
 
   function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
-  // 수정 시 해당 날짜의 시간들만 다시 계산하도록 버그 수정
+  // 🔥 드래그앤드롭 및 수정 시 해당 날짜의 시간들만 연쇄적으로 다시 계산
   function recomputeTimesForDate(date){
     sortStateStops();
     var stopsOnDate = getStopsOnDate(date);
@@ -1621,18 +1702,32 @@
     }
   }
 
+  // 🔥 모달 창에서 수정 및 "대중교통 재설정" 기능 추가
+  var tempEditTransport = null;
   function openEditStopModal(stopId){
     var idx = state.stops.findIndex(function(s){ return s.id === stopId; });
     if(idx === -1) return;
     var stop = state.stops[idx];
+    
+    var stopsOnDate = getStopsOnDate(stop.date);
+    var dateIdx = stopsOnDate.findIndex(function(s){ return s.id === stopId; });
+    var prev = dateIdx > 0 ? stopsOnDate[dateIdx-1] : null;
+
+    tempEditTransport = { mode: stop.transport, minutes: stop.transportMin };
 
     var root = document.getElementById('modalRoot');
-    root.innerHTML =
-      '<div class="modal-overlay" id="ovEdit"><div class="modal modal-wrap">' +
+    var html = 
+      '<div class="modal-overlay" id="ovEdit"><div class="modal modal-wrap" style="max-width:440px;">' +
       '<button class="modal-close" id="closeEdit">×</button>' +
       '<h3>'+escapeHtml(stop.name)+'</h3>' +
-      '<p>머무는 시간과 메모를 바꿀 수 있어요. 머무는 시간을 바꾸면 이후 장소들의 도착 시간도 자동으로 다시 계산돼요.</p>' +
-      '<div class="modal-field"><label>머무는 시간 (분)</label><input type="number" id="editDuration" min="0" step="5" value="'+stop.duration+'"></div>' +
+      '<p>머무는 시간과 메모를 바꿀 수 있습니다. 순서를 변경했다면 이동 수단도 다시 확인해주세요.</p>';
+
+    if(prev) {
+      html += '<div class="field"><label>이전 장소('+escapeHtml(prev.name)+')로부터 이동 수단 재설정</label>';
+      html += '<div class="transport-options" id="editTransportOptions">계산 중...</div></div>';
+    }
+
+    html += '<div class="modal-field"><label>머무는 시간 (분)</label><input type="number" id="editDuration" min="0" step="5" value="'+stop.duration+'"></div>' +
       '<div class="chips" id="editDurationChips" style="margin:-4px 0 14px;">' +
         '<span class="chip" data-min="30">30분</span>' +
         '<span class="chip" data-min="60">1시간</span>' +
@@ -1643,6 +1738,12 @@
       '<div class="modal-actions"><button class="btn-secondary" id="cancelEdit">취소</button><button class="btn-dark" id="saveEdit">저장</button></div>' +
       '</div></div>';
 
+    root.innerHTML = html;
+
+    if(prev) {
+      loadEditTransportOptions(prev.lat, prev.lng, stop.lat, stop.lng, stop.transport);
+    }
+
     document.getElementById('closeEdit').addEventListener('click', closeModal);
     document.getElementById('cancelEdit').addEventListener('click', closeModal);
     document.getElementById('ovEdit').addEventListener('click', function(e){ if(e.target.id==='ovEdit') closeModal(); });
@@ -1651,13 +1752,81 @@
         document.getElementById('editDuration').value = e.target.getAttribute('data-min');
       }
     });
+    
     document.getElementById('saveEdit').addEventListener('click', function(){
       stop.duration = parseInt(document.getElementById('editDuration').value, 10) || 0;
       stop.note = document.getElementById('editNote').value.trim();
+      
+      if(prev && tempEditTransport) {
+        stop.transport = tempEditTransport.mode;
+        stop.transportMin = tempEditTransport.minutes;
+      }
+
       recomputeTimesForDate(stop.date);
       closeModal();
       renderAll();
     });
+  }
+
+  // 모달창 내부용 ODsay 교통수단 불러오기 로직
+  function loadEditTransportOptions(fromLat, fromLng, toLat, toLng, currentMode){
+    var km = haversineKm(fromLat, fromLng, toLat, toLng);
+    var walkMin = estimateWalkMinutes(km);
+    var carMin = estimateCarMinutes(km);
+    var transitTimes = {subway:null, bus:null};
+
+    var container = document.getElementById('editTransportOptions');
+    if(!container) return;
+
+    function renderEditChips(){
+      var opts = [];
+      if(transitTimes.subway!=null) opts.push({mode:'subway', minutes:transitTimes.subway, estimated:false});
+      if(transitTimes.bus!=null) opts.push({mode:'bus', minutes:transitTimes.bus, estimated:false});
+      opts.push({mode:'car', minutes:carMin, estimated:true});
+      opts.push({mode:'walk', minutes:walkMin, estimated:true});
+
+      container.innerHTML = opts.map(function(o){
+        var isActive = tempEditTransport && tempEditTransport.mode === o.mode ? ' active' : '';
+        return '<button type="button" class="transport-chip'+(o.estimated?' estimated':'')+isActive+'" data-mode="'+o.mode+'" data-min="'+o.minutes+'">'+
+          '<span>'+MODE_ICON[o.mode]+'</span><span>'+MODE_LABEL[o.mode]+'</span><span class="chip-time">'+o.minutes+'분</span>'+
+          '</button>';
+      }).join('');
+
+      Array.prototype.forEach.call(container.querySelectorAll('.transport-chip'), function(btn){
+        btn.addEventListener('click', function(){
+          Array.prototype.forEach.call(container.querySelectorAll('.transport-chip'), function(b){ b.classList.remove('active'); });
+          btn.classList.add('active');
+          tempEditTransport = {
+            mode: btn.getAttribute('data-mode'),
+            minutes: parseInt(btn.getAttribute('data-min'),10)
+          };
+        });
+      });
+    }
+
+    renderEditChips();
+
+    if(!ODSAY_API_KEY || ODSAY_API_KEY.indexOf("여기에") !== -1) return;
+
+    var url = "https://api.odsay.com/v1/api/searchPubTransPathT?SX="+fromLng+"&SY="+fromLat+"&EX="+toLng+"&EY="+toLat+"&apiKey="+encodeURIComponent(ODSAY_API_KEY);
+    fetch(url)
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        if(data && data.result && data.result.path){
+          data.result.path.forEach(function(p){
+            var t = p.info && p.info.totalTime;
+            if(t==null) return;
+            if(p.pathType===1){ transitTimes.subway = transitTimes.subway==null ? t : Math.min(transitTimes.subway, t); }
+            if(p.pathType===2){ transitTimes.bus = transitTimes.bus==null ? t : Math.min(transitTimes.bus, t); }
+            if(p.pathType===3){
+              transitTimes.subway = transitTimes.subway==null ? t : Math.min(transitTimes.subway, t);
+              transitTimes.bus = transitTimes.bus==null ? t : Math.min(transitTimes.bus, t);
+            }
+          });
+        }
+        renderEditChips();
+      })
+      .catch(function(err){ console.error("ODsay Edit Error:", err); });
   }
 
   function openShareModal(){
@@ -1741,7 +1910,7 @@
       state.viewMode = true;
       state.currentStep = 0;
       state.activeDay = 'all';
-      state.lastStoryboardDay = -1; // 뷰 모드 전환시 일차 초기화
+      state.lastStoryboardDay = -1; 
       
       document.getElementById('viewTag').style.display='inline-block';
       document.getElementById('viewTag').textContent = '보기 모드 · '+code;
