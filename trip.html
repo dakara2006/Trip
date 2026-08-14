@@ -299,10 +299,23 @@
   .stop-list{list-style:none;margin:0;padding:0;}
   
   .stop-item{position:relative;padding-left:36px;padding-bottom:6px; cursor:grab;}
-  .stop-item:active{cursor:grabbing;}
-
-  /* 🔥 드래그 시 고스트 요소가 솔리드 블록처럼 보이게 처리 */
-  .stop-item-ghost { opacity: 0.3; background: var(--paper-dim); border-radius: var(--radius-md); }
+  
+  /* 🔥 솔리드 블록 드래그 앤 드롭 애니메이션용 스타일 */
+  .stop-item-drag {
+    opacity: 1 !important; /* 투명해지지 않고 그대로 유지 */
+    z-index: 9999 !important;
+    cursor: grabbing !important;
+  }
+  .stop-item-drag .stop-card {
+    box-shadow: 0 16px 32px rgba(0,0,0,0.15) !important;
+    transform: scale(1.02); /* 카드를 들고 있는 느낌으로 살짝 확대 */
+    transition: transform 0.1s;
+  }
+  .stop-item-ghost {
+    opacity: 0.15; /* 원래 자리에 들어갈 공간을 어둡게 표시 */
+    background: var(--paper-dim);
+    border-radius: var(--radius-md);
+  }
 
   .stop-node{
     position:absolute;left:0;top:8px;
@@ -425,11 +438,10 @@
     width:32px;height:32px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
     color:#fff;
-    font-weight:500; /* 숫자를 더 얇게 수정 */
+    font-weight:500; 
     font-size:14.5px;
     line-height:1;
     box-shadow:0 4px 14px rgba(0,0,0,.28);
-    /* border: 2.5px solid #fff; <- 테두리 삭제! */
   }
   .trip-marker.current{
     width:42px;height:42px;
@@ -509,7 +521,7 @@
   }
   .day-transition-overlay.show .day-transition-text{transform:translateY(0) scale(1);}
 
-  /* ===== Recent Trips ===== */
+  /* ===== Recent Trips (iOS Card Style) ===== */
   .recent{margin-top:24px;}
   .recent h4{font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.02em;margin:0 0 12px;font-weight:700;}
   .recent-item{
@@ -525,7 +537,7 @@
   .recent-item button:hover{background:var(--fill-strong);}
   .recent-code{font-size:12.5px;color:var(--ink-soft);font-weight:600;margin-left:8px;}
 
-  /* ===== Modal ===== */
+  /* ===== Modal (iOS alert / sheet style) ===== */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(0,0,0,.35);
     -webkit-backdrop-filter:blur(2px);
@@ -566,19 +578,16 @@
 
   /* 🔥 모바일 반응형 및 바텀 시트(Bottom Sheet) 기능 */
   @media (max-width:860px){
-    /* 1. 상단 바에는 오직 "여행 이름"만 중앙에 배치 */
     .board { justify-content: center; height: 58px; padding: 0; }
     .board-badge, .board-actions, .view-tag { display: none !important; }
     .trip-title-input { position: static; transform: none; width: 100%; font-size: 18px; text-align: center; }
 
-    /* 2. 지도와 패널 레이아웃 조작 */
     .layout{display:block; position:relative; height:calc(100vh - 58px); overflow:hidden;}
-    .map-wrap{position:absolute; inset:0; height:60vh; z-index:1; width:100%;} /* 지도는 60% 높이 차지 */
+    .map-wrap{position:absolute; inset:0; height:60vh; z-index:1; width:100%;} 
     .legend{left:12px;right:12px;bottom:auto;top:12px;} 
     
-    /* 3. 모바일에서 일정 영역은 바텀 시트로 변환 */
     .sidebar{
-      position:absolute; bottom:0; left:0; width:100%; height:55%; /* 기본적으로 살짝 올라와 있음 */
+      position:absolute; bottom:0; left:0; width:100%; height:55%; 
       border-radius:24px 24px 0 0; border-top:1px solid rgba(0,0,0,0.1);
       box-shadow:0 -4px 24px rgba(0,0,0,.15);
       transition:transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -586,7 +595,7 @@
       z-index:100;
     }
     .sidebar.collapsed{
-      transform:translateY(calc(100% - 40px)); /* 내렸을 때 핸들(40px)만 보임 */
+      transform:translateY(calc(100% - 40px)); 
     }
     .sidebar-handle-wrap{
       display:flex; justify-content:center; align-items:center;
@@ -705,11 +714,11 @@
 <!-- 카카오맵 API 로드 -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 
-<!-- 🔥 파이어베이스 라이브러리 -->
+<!-- 파이어베이스 추가 라이브러리 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-<!-- 🔥 솔리드 블록 드래그 애니메이션을 위한 SortableJS 라이브러리 추가 -->
+<!-- 🔥 솔리드 블록 드래그 앤 드롭을 위한 SortableJS -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
 <script>
@@ -720,7 +729,7 @@
   // 🔥 파이어베이스 설정 및 초기화
   // =========================================================================
   var firebaseConfig = {
-    apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k", // 본인의 키로 교체 필요
+    apiKey: "본인의_API_KEY", // <--- 실제 발급받은 키로 교체하세요!
     authDomain: "trip-df7f2.firebaseapp.com",
     databaseURL: "https://trip-df7f2-default-rtdb.firebaseio.com",
     projectId: "trip-df7f2",
@@ -1084,7 +1093,7 @@
     el.innerHTML = html;
 
     if(!state.viewMode){
-      // 삭제, 수정 버튼 연결
+      // 기존 버튼 이벤트
       Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function(btn){
         btn.addEventListener('click', function(){
           var id = btn.getAttribute('data-remove');
@@ -1098,15 +1107,19 @@
         });
       });
 
-      // 🔥 SortableJS 솔리드 블럭 드래그 앤 드롭 연결
+      // 🔥 SortableJS: 실제 요소 그대로(투명도 100%) 솔리드 블록 드래그 앤 드롭
       if (typeof Sortable !== 'undefined') {
         var lists = el.querySelectorAll('.stop-list');
         Array.prototype.forEach.call(lists, function(listEl) {
           Sortable.create(listEl, {
             group: 'shared', 
-            animation: 250,  // 부드러운 위치 교환 애니메이션
-            ghostClass: 'stop-item-ghost', // 드래그 시 원래 위치 반투명 처리
-            delay: 150, // 모바일에서 스크롤과 겹치지 않게 살짝 길게 터치 시 발동
+            animation: 250,  
+            ghostClass: 'stop-item-ghost', // 원래 자리에 남는 공간 표시
+            dragClass: 'stop-item-drag',
+            forceFallback: true,        // 브라우저 기본 반투명 효과 강제 해제 (핵심)
+            fallbackClass: 'stop-item-drag', // 공중에 떠있는 솔리드 요소 클래스
+            fallbackOnBody: true,
+            delay: 150, 
             delayOnTouchOnly: true,
             onEnd: function(evt) {
               var itemEl = evt.item;
@@ -1127,7 +1140,7 @@
                 newDate = state.stops[nextIdx].date;
                 targetIdx = nextIdx;
               } else {
-                return; // 에러 방지
+                return;
               }
 
               var srcIdx = state.stops.findIndex(function(s){ return s.id === srcId; });
@@ -1142,7 +1155,7 @@
               state.stops.splice(targetIdx, 0, movedItem);
               sortStateStops();
               
-              // 각 날짜의 1번째 장소는 교통수단 정보 삭제
+              // 각 날짜의 1번째 장소는 교통수단 정보 삭제 (꼬임 방지)
               var grps = groupByDay(state.stops);
               grps.forEach(function(g){
                 if(g.stops.length > 0) {
@@ -1156,10 +1169,11 @@
               
               renderAll();
               
-              // 2개 장소여도 위치를 바꾸면 올바르게 수정창(팝업)이 뜸
+              // 2개 장소여도 위치가 바뀌면 수정창 팝업이 무조건 뜹니다.
               setTimeout(function(){
                 var stopsOnDate = getStopsOnDate(newDate);
                 var movedLocalIdx = stopsOnDate.findIndex(function(s){ return s.id === movedItem.id; });
+                
                 if (movedLocalIdx === 0 && stopsOnDate.length > 1) {
                   openEditStopModal(stopsOnDate[1].id);
                 } else {
@@ -1762,6 +1776,8 @@
     for(var i = 1; i < stopsOnDate.length; i++){
       var prev = stopsOnDate[i-1];
       var s = stopsOnDate[i];
+      if(!s.transport) continue; 
+      
       if(s.transportMin != null){
         var departure = addMinutes(prev.time, prev.duration);
         s.time = addMinutes(departure, s.transportMin);
