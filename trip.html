@@ -301,7 +301,6 @@
   .stop-item{position:relative;padding-left:36px;padding-bottom:6px; cursor:grab;}
   .stop-item:active{cursor:grabbing;}
 
-  /* 🔥 드래그 시 고스트 요소가 솔리드 블록처럼 보이게 처리 */
   .stop-item-drag {
     opacity: 1 !important; 
     z-index: 9999 !important;
@@ -524,11 +523,10 @@
   }
   .day-transition-overlay.show .day-transition-text{transform:translateY(0) scale(1);}
   
-  /* 타자기 커서 효과 */
   .type-cursor { font-weight: 300; opacity: 1; animation: blink 0.8s step-end infinite; margin-left: 2px;}
   @keyframes blink { 50% { opacity: 0; } }
 
-  /* ===== Recent Trips (iOS Card Style) ===== */
+  /* ===== Recent Trips ===== */
   .recent{margin-top:24px;}
   .recent h4{font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.02em;margin:0 0 12px;font-weight:700;}
   .recent-item{
@@ -590,7 +588,6 @@
     .trip-title-input { position: static; transform: none; width: 100%; font-size: 18px; text-align: center; }
 
     .layout{display:block; position:relative; height:calc(100vh - 58px); overflow:hidden;}
-    /* 지도가 모바일에서 화면 전체 높이(100%)를 덮도록 수정 */
     .map-wrap{position:absolute; inset:0; height:100%; z-index:1; width:100%;} 
     .legend{left:12px;right:12px;bottom:auto;top:12px;} 
     
@@ -722,7 +719,7 @@
 <!-- 카카오맵 API 로드 -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 
-<!-- 파이어베이스 라이브러리 -->
+<!-- 파이어베이스 추가 라이브러리 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -772,7 +769,7 @@
     viewMode: false,
     currentStep: 0,
     lastStoryboardDay: -1,
-    isPlayingIntro: false, // 🔥 인트로 재생 중 상태 관리
+    isPlayingIntro: false,
     selectedPlace: null,
     selectedTransport: null,
     pendingPick: false,
@@ -858,7 +855,6 @@
         if(proj) {
           var point = proj.pointFromCoords(coords);
           var mapHeight = document.getElementById('map').offsetHeight;
-          // 중심을 화면의 약간 아래로 당겨서 마커가 패널에 가리지 않게 위쪽 빈 공간에 보이도록 처리
           point.y += (mapHeight * 0.25); 
           return proj.coordsFromPoint(point);
         }
@@ -935,7 +931,6 @@
     state.tempMarker = new kakao.maps.Marker({ position: coords });
     state.tempMarker.setMap(map);
     
-    // 오프셋 적용된 위치로 panTo
     var centerCoords = getOffsetCenter(coords);
     map.panTo(centerCoords);
   }
@@ -967,6 +962,8 @@
 
     var bounds = new kakao.maps.LatLngBounds();
     var hasStops = false;
+    var renderedStopsCount = 0;
+    var lastRenderedCoord = null;
 
     groups.forEach(function(g, gi){
       var globalIdx = indexOfDayKey(g.key);
@@ -975,7 +972,9 @@
 
       g.stops.forEach(function(s, i){
         hasStops = true;
+        renderedStopsCount++;
         var coords = new kakao.maps.LatLng(s.lat, s.lng);
+        lastRenderedCoord = coords;
         bounds.extend(coords);
         coordsList.push(coords);
 
@@ -1014,13 +1013,17 @@
     });
 
     if(hasStops && !state.viewMode){
-      // 모바일에서 하단 패널이 올라와 있을 때 지도 하단 패딩을 여유있게 주어 
-      // 모든 마커가 화면 윗쪽(가시 영역)에 위치하도록 bounds 조정
-      var pb = 50;
-      if(window.innerWidth <= 860 && !document.getElementById('mobileSidebar').classList.contains('collapsed')) {
-        pb = document.getElementById('map').offsetHeight * 0.55 + 20;
+      // 🔥 장소가 1개일 때는 setBounds가 아닌 오프셋 패딩을 먹인 Center 이동 사용
+      if(renderedStopsCount === 1) {
+        map.setCenter(getOffsetCenter(lastRenderedCoord));
+        map.setLevel(4);
+      } else {
+        var pb = 50;
+        if(window.innerWidth <= 860 && !document.getElementById('mobileSidebar').classList.contains('collapsed')) {
+          pb = document.getElementById('map').offsetHeight * 0.55 + 20;
+        }
+        map.setBounds(bounds, 50, 50, pb, 50);
       }
-      map.setBounds(bounds, 50, 50, pb, 50);
     }
     renderLegend(groups);
   }
@@ -1251,7 +1254,6 @@
       document.getElementById('timeline').style.display = 'none';
       document.getElementById('storyboard').style.display = 'flex';
       
-      // 인트로 재생 중이 아니라면 바로 스토리보드를 그리고 맵을 이동시킵니다
       if(!state.isPlayingIntro) {
         if(state.stops.length){
           renderStoryboard(false, true); 
@@ -1260,7 +1262,6 @@
           renderMap();
         }
       } else {
-        // 인트로 재생 중엔 맵의 마커만 일단 조용히 그려둡니다 (화면은 검은색 덮개로 가려짐)
         renderMap();
       }
     } else {
@@ -1318,7 +1319,6 @@
           }
           sidebar.style.transform = ''; 
       }
-      // 시트가 열리거나 닫힌 후 지도의 오프셋을 재계산하기 위해 맵 다시 그리기
       setTimeout(renderAll, 300);
   });
   
@@ -1333,7 +1333,6 @@
     return sortStateStops();
   }
 
-  // 🔥 보기 모드 진입 시 타이핑 효과 오프닝 애니메이션
   function playIntroTransition(titleText, onDone) {
     var ov = document.getElementById('dayTransitionOverlay');
     var txt = document.getElementById('dayTransitionText');
@@ -1405,7 +1404,6 @@
     steps.forEach(function(s){ if(uniqueDates.indexOf(s.date) === -1) uniqueDates.push(s.date); });
     var currentDayNum = uniqueDates.indexOf(current.date) + 1;
 
-    // 인트로 중이 아닐 때만 일반 일차 전환 애니메이션 실행
     if(checkTransition && state.lastStoryboardDay !== currentDayNum && !state.isPlayingIntro) {
       state.lastStoryboardDay = currentDayNum;
       playDayTransition(currentDayNum);
@@ -1456,7 +1454,7 @@
 
     if(map && current){
       var coords = new kakao.maps.LatLng(current.lat, current.lng);
-      var centerCoords = getOffsetCenter(coords); // 오프셋 적용
+      var centerCoords = getOffsetCenter(coords); 
       if(animate){
         animateMapTravel(centerCoords, 600, function(){
           map.setLevel(4, { animate: true });
@@ -2081,20 +2079,18 @@
       state.currentStep = 0;
       state.activeDay = 'all';
       state.lastStoryboardDay = -1; 
-      state.isPlayingIntro = true; // 인트로 재생 플래그 ON
+      state.isPlayingIntro = true; 
       
       document.getElementById('viewTag').style.display='inline-block';
       document.getElementById('viewTag').textContent = '보기 모드 · '+code;
       document.getElementById('tripTitle').readOnly = true;
       document.getElementById('addForm').style.display='none';
       
-      // 인트로 중에는 화면에 마커만 그리고 스토리보드 UI는 띄우지 않음
       renderAll();
 
-      // 인트로 애니메이션 실행 후 끝날 때 콜백으로 플래그 OFF 및 정상 렌더링
       playIntroTransition(state.title, function() {
         state.isPlayingIntro = false;
-        state.lastStoryboardDay = 1; // 1일차 애니메이션은 방금 봤으므로 스킵
+        state.lastStoryboardDay = 1; 
         renderAll();
       });
 
