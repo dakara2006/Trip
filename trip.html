@@ -493,6 +493,22 @@
   }
   .day-transition-overlay.show .day-transition-text{transform:translateY(0) scale(1);}
 
+  /* ===== Recent Trips (iOS Card Style) ===== */
+  .recent{margin-top:24px;}
+  .recent h4{font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.02em;margin:0 0 12px;font-weight:700;}
+  .recent-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 16px;border:none;border-radius:var(--radius-md);
+    background:var(--card);margin-bottom:10px;font-size:14.5px;font-weight:700;
+    box-shadow:0 4px 20px rgba(0,0,0,.04);
+  }
+  .recent-item button{
+    border:none;background:var(--fill);padding:8px 14px;
+    border-radius:20px;font-size:13px;font-weight:700;color:var(--blue);transition:.15s;
+  }
+  .recent-item button:hover{background:var(--fill-strong);}
+  .recent-code{font-size:12.5px;color:var(--ink-soft);font-weight:600;margin-left:8px;}
+
   /* ===== Modal (iOS alert / sheet style) ===== */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(0,0,0,.35);
@@ -669,9 +685,10 @@
 
   // =========================================================================
   // 🔥 파이어베이스 설정 및 초기화
+  // 파이어베이스 콘솔에서 본인의 앱 정보로 아래 내용을 교체해주세요!
   // =========================================================================
   var firebaseConfig = {
-    apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k",
+    apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k", // 본인의 키로 교체 필요
     authDomain: "trip-df7f2.firebaseapp.com",
     databaseURL: "https://trip-df7f2-default-rtdb.firebaseio.com",
     projectId: "trip-df7f2",
@@ -754,12 +771,21 @@
   function estimateWalkMinutes(km){ return Math.max(1, Math.round(km / WALK_KMH * 60)); }
   function estimateCarMinutes(km){ return Math.max(1, Math.round(km / CAR_KMH * 60)); }
 
-  function sortedStops(){
-    return state.stops.slice().sort(function(a,b){
+  // 🔥 데이터를 날짜+시간 순으로 항상 정렬시키는 핵심 함수
+  function sortStateStops(){
+    state.stops.sort(function(a,b){
       var ka=(a.date||'9999')+a.time, kb=(b.date||'9999')+b.time;
       return ka<kb?-1:ka>kb?1:0;
     });
+    return state.stops;
   }
+  
+  // 선택한 날짜에 해당하는 장소들만 필터링해서 가져오는 함수 (버그 해결 핵심)
+  function getStopsOnDate(date){
+    sortStateStops();
+    return state.stops.filter(function(s){ return s.date === date; });
+  }
+
   function groupByDay(list){
     var mapObj={}, order=[];
     list.forEach(function(s){
@@ -803,8 +829,8 @@
       togglePicking(false);
 
       var selectedDate = document.getElementById('stopDate').value;
-      var lastStop = state.stops.length > 0 ? state.stops[state.stops.length - 1] : null;
-      var isFirstOfDay = !lastStop || lastStop.date !== selectedDate;
+      var stopsOnDate = getStopsOnDate(selectedDate);
+      var isFirstOfDay = stopsOnDate.length === 0;
 
       if(!isFirstOfDay) {
         loadTransportOptions(lat, lng);
@@ -849,7 +875,7 @@
     polylines.forEach(function(p){ p.setMap(null); });
     polylines = [];
 
-    var groups = groupByDay(sortedStops());
+    var groups = groupByDay(sortStateStops());
     if(state.activeDay!=='all'){
       groups = groups.filter(function(g){ return g.key===state.activeDay; });
     }
@@ -863,7 +889,7 @@
 
     var highlightId = null;
     if(state.viewMode){
-      var storySteps = getStoryboardSteps();
+      var storySteps = sortStateStops();
       if(storySteps[state.currentStep]) highlightId = storySteps[state.currentStep].id;
     }
 
@@ -871,7 +897,8 @@
     var hasStops = false;
 
     groups.forEach(function(g, gi){
-      var color = state.activeDay==='all' ? dayColor(gi) : dayColor(indexOfDayKey(g.key));
+      var globalIdx = indexOfDayKey(g.key);
+      var color = state.activeDay==='all' ? dayColor(globalIdx) : dayColor(globalIdx);
       var coordsList = [];
 
       g.stops.forEach(function(s, i){
@@ -897,7 +924,7 @@
         markers.push(customOverlay);
       });
 
-      // 동일 일차(Day) 내에서만 선 그리기 (다른 일차와는 이어지지 않음)
+      // 동일 일차(Day) 내에서만 선 그리기
       for(var i = 0; i < coordsList.length - 1; i++){
         var next = g.stops[i+1];
         var mode = next.transport || 'walk';
@@ -922,7 +949,7 @@
   }
 
   function indexOfDayKey(key){
-    var order = groupByDay(sortedStops()).map(function(g){return g.key;});
+    var order = groupByDay(sortStateStops()).map(function(g){return g.key;});
     return order.indexOf(key);
   }
 
@@ -945,7 +972,7 @@
 
   // ---------- timeline ----------
   function renderDayTabs(){
-    var groups = groupByDay(sortedStops());
+    var groups = groupByDay(sortStateStops());
     var el = document.getElementById('dayTabs');
     if(groups.length<2){ el.innerHTML=''; return; }
     var html = '<span class="day-tab'+(state.activeDay==='all'?' active':'')+'" data-day="all">전체</span>';
@@ -953,14 +980,25 @@
       html += '<span class="day-tab'+(state.activeDay===g.key?' active':'')+'" data-day="'+g.key+'">'+(idx+1)+'일차</span>';
     });
     el.innerHTML = html;
+    
+    // 날짜 탭 클릭 시, 현재 폼의 날짜도 동기화 시켜줌 (버그 수정 핵심)
     Array.prototype.forEach.call(el.querySelectorAll('.day-tab'), function(t){
-      t.addEventListener('click', function(){ state.activeDay=t.getAttribute('data-day'); renderAll(); });
+      t.addEventListener('click', function(){ 
+        state.activeDay = t.getAttribute('data-day'); 
+        if(state.activeDay !== 'all') {
+            document.getElementById('stopDate').value = state.activeDay;
+            // 강제로 change 이벤트 발생시켜서 폼 상태 갱신
+            var evt = new Event('change');
+            document.getElementById('stopDate').dispatchEvent(evt);
+        }
+        renderAll(); 
+      });
     });
   }
 
   function renderTimeline(){
     var el = document.getElementById('timeline');
-    var groups = groupByDay(sortedStops());
+    var groups = groupByDay(sortStateStops());
     if(state.activeDay!=='all') groups = groups.filter(function(g){return g.key===state.activeDay;});
 
     if(!state.stops.length){
@@ -1042,8 +1080,8 @@
     var firstField = document.getElementById('firstArrivalField');
 
     var selectedDate = document.getElementById('stopDate').value;
-    var lastStop = state.stops.length > 0 ? state.stops[state.stops.length - 1] : null;
-    var isFirstOfDay = !lastStop || lastStop.date !== selectedDate; // 새로운 일차인지 체크
+    var stopsOnDate = getStopsOnDate(selectedDate);
+    var isFirstOfDay = stopsOnDate.length === 0;
 
     if(!isFirstOfDay) {
       ts.style.display = 'block';
@@ -1064,7 +1102,7 @@
       document.getElementById('timeline').style.display = 'none';
       document.getElementById('storyboard').style.display = 'flex';
       if(state.stops.length){
-        renderStoryboard(false, true); // 초기 로드시 애니메이션 없이 렌더링 (단, 일차 전환은 체크)
+        renderStoryboard(false, true); // 초기 로드시 애니메이션 없이 렌더링
       } else {
         document.getElementById('storyboard').innerHTML = '<div class="empty-state">표시할 장소가 없어요.</div>';
         renderMap();
@@ -1081,7 +1119,7 @@
 
   // ---------- 스토리보드(공유 일정 재생) 모드 ----------
   function getStoryboardSteps(){
-    return sortedStops();
+    return sortStateStops();
   }
 
   // 일차 전환 풀스크린 애니메이션 실행 함수
@@ -1292,8 +1330,8 @@
     sp.textContent = '선택됨: '+addr;
 
     var selectedDate = document.getElementById('stopDate').value;
-    var lastStop = state.stops.length > 0 ? state.stops[state.stops.length - 1] : null;
-    var isFirstOfDay = !lastStop || lastStop.date !== selectedDate;
+    var stopsOnDate = getStopsOnDate(selectedDate);
+    var isFirstOfDay = stopsOnDate.length === 0;
 
     if(!isFirstOfDay) {
       loadTransportOptions(lat, lng);
@@ -1315,8 +1353,8 @@
   document.getElementById('stopDate').addEventListener('change', function(){
     updateTransportFormVisibility();
     var selectedDate = document.getElementById('stopDate').value;
-    var lastStop = state.stops.length > 0 ? state.stops[state.stops.length - 1] : null;
-    var isFirstOfDay = !lastStop || lastStop.date !== selectedDate;
+    var stopsOnDate = getStopsOnDate(selectedDate);
+    var isFirstOfDay = stopsOnDate.length === 0;
     
     if (state.selectedPlace) {
       if (!isFirstOfDay) {
@@ -1330,8 +1368,8 @@
 
   function updateAddBtn(){
     var selectedDate = document.getElementById('stopDate').value;
-    var lastStop = state.stops.length > 0 ? state.stops[state.stops.length - 1] : null;
-    var isFirstOfDay = !lastStop || lastStop.date !== selectedDate;
+    var stopsOnDate = getStopsOnDate(selectedDate);
+    var isFirstOfDay = stopsOnDate.length === 0;
 
     var ok = !!state.selectedPlace;
     if(isFirstOfDay){
@@ -1363,9 +1401,11 @@
     resetTransportSelection();
     updateAddBtn();
 
-    if(state.stops.length === 0) return;
+    var selectedDate = document.getElementById('stopDate').value;
+    var stopsOnDate = getStopsOnDate(selectedDate);
+    if(stopsOnDate.length === 0) return;
 
-    var last = state.stops[state.stops.length - 1];
+    var last = stopsOnDate[stopsOnDate.length - 1]; // 선택된 날짜의 가장 마지막 장소
     var km = haversineKm(last.lat, last.lng, toLat, toLng);
     var walkMin = estimateWalkMinutes(km);
     var carMin = estimateCarMinutes(km);
@@ -1430,7 +1470,10 @@
   }
 
   function selectTransportOption(mode, minutes){
-    var last = state.stops[state.stops.length - 1];
+    var selectedDate = document.getElementById('stopDate').value;
+    var stopsOnDate = getStopsOnDate(selectedDate);
+    var last = stopsOnDate[stopsOnDate.length - 1];
+
     var departure = addMinutes(last.time, last.duration);
     var arrival = addMinutes(departure, minutes);
     state.selectedTransport = { mode: mode, minutes: minutes, arrival: arrival };
@@ -1447,8 +1490,8 @@
     if(!state.selectedPlace) return;
     
     var selectedDate = document.getElementById('stopDate').value || todayStr();
-    var lastStop = state.stops.length > 0 ? state.stops[state.stops.length - 1] : null;
-    var isFirstOfDay = !lastStop || lastStop.date !== selectedDate;
+    var stopsOnDate = getStopsOnDate(selectedDate);
+    var isFirstOfDay = stopsOnDate.length === 0;
 
     if(isFirstOfDay && !document.getElementById('stopTime').value) return;
     if(!isFirstOfDay && !state.selectedTransport) return;
@@ -1466,7 +1509,9 @@
       transport: isFirstOfDay ? null : state.selectedTransport.mode,
       transportMin: isFirstOfDay ? null : state.selectedTransport.minutes
     };
+    
     state.stops.push(stop);
+    sortStateStops(); // 새로 넣은 후 전체 재정렬하여 순서 꼬임 방지
 
     document.getElementById('placeSearch').value='';
     document.getElementById('selectedPlace').style.display='none';
@@ -1560,11 +1605,13 @@
 
   function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
 
-  function recomputeTimesFrom(startIndex){
-    for(var i = startIndex; i < state.stops.length; i++){
-      var prev = state.stops[i-1];
-      var s = state.stops[i];
-      // 만약 새로운 일차(수단 정보 없음)면 기존 시간 계산 사슬을 끊습니다
+  // 수정 시 해당 날짜의 시간들만 다시 계산하도록 버그 수정
+  function recomputeTimesForDate(date){
+    sortStateStops();
+    var stopsOnDate = getStopsOnDate(date);
+    for(var i = 1; i < stopsOnDate.length; i++){
+      var prev = stopsOnDate[i-1];
+      var s = stopsOnDate[i];
       if(!s.transport) continue; 
       
       if(s.transportMin != null){
@@ -1607,7 +1654,7 @@
     document.getElementById('saveEdit').addEventListener('click', function(){
       stop.duration = parseInt(document.getElementById('editDuration').value, 10) || 0;
       stop.note = document.getElementById('editNote').value.trim();
-      recomputeTimesFrom(idx + 1);
+      recomputeTimesForDate(stop.date);
       closeModal();
       renderAll();
     });
