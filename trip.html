@@ -300,14 +300,9 @@
   
   .stop-item{position:relative;padding-left:36px;padding-bottom:6px; cursor:grab;}
   .stop-item:active{cursor:grabbing;}
-  .stop-item.is-dragging{opacity:0.3;}
-  /* 드롭 위치 표시용 파란 선 */
-  .stop-item::before {
-    content:''; position:absolute; left:36px; right:0; height:3px; background:var(--blue); 
-    opacity:0; pointer-events:none; z-index:10; transition:opacity 0.15s; border-radius:2px;
-  }
-  .stop-item.drag-over-top::before{top:-1px; opacity:1;}
-  .stop-item.drag-over-bottom::before{bottom:4px; opacity:1;}
+
+  /* 🔥 드래그 시 고스트 요소가 솔리드 블록처럼 보이게 처리 */
+  .stop-item-ghost { opacity: 0.3; background: var(--paper-dim); border-radius: var(--radius-md); }
 
   .stop-node{
     position:absolute;left:0;top:8px;
@@ -339,9 +334,7 @@
     padding:12px 14px;
     margin-bottom:6px;
     box-shadow:0 4px 20px rgba(0,0,0,.04);
-    pointer-events:none; 
   }
-  .stop-card * { pointer-events:auto; }
 
   .stop-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
   .stop-name{font-weight:700;font-size:14.5px;letter-spacing:-.01em;}
@@ -427,7 +420,7 @@
   .legend-swatch.mode-walk{background:repeating-linear-gradient(to right,var(--walk) 0 4px,transparent 4px 8px);}
   .legend-swatch.mode-car{background:repeating-linear-gradient(to right,var(--car) 0 6px,transparent 6px 10px);}
 
-  /* 🔥 지도 마커 디자인 변경 (숫자 얇게) */
+  /* 🔥 지도 마커 디자인 변경 (테두리 제거, 숫자 얇게) */
   .trip-marker{
     width:32px;height:32px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
@@ -436,7 +429,7 @@
     font-size:14.5px;
     line-height:1;
     box-shadow:0 4px 14px rgba(0,0,0,.28);
-    border:2.5px solid #fff;
+    /* border: 2.5px solid #fff; <- 테두리 삭제! */
   }
   .trip-marker.current{
     width:42px;height:42px;
@@ -573,43 +566,34 @@
 
   /* 🔥 모바일 반응형 및 바텀 시트(Bottom Sheet) 기능 */
   @media (max-width:860px){
+    /* 1. 상단 바에는 오직 "여행 이름"만 중앙에 배치 */
+    .board { justify-content: center; height: 58px; padding: 0; }
+    .board-badge, .board-actions, .view-tag { display: none !important; }
+    .trip-title-input { position: static; transform: none; width: 100%; font-size: 18px; text-align: center; }
+
+    /* 2. 지도와 패널 레이아웃 조작 */
     .layout{display:block; position:relative; height:calc(100vh - 58px); overflow:hidden;}
-    .map-wrap{width:100%; height:100%; position:absolute; inset:0; z-index:1;}
-    .legend{left:12px;right:12px;bottom:auto;top:12px;} /* 범례 위치를 지도가 가려지지 않게 상단으로 이동 */
+    .map-wrap{position:absolute; inset:0; height:60vh; z-index:1; width:100%;} /* 지도는 60% 높이 차지 */
+    .legend{left:12px;right:12px;bottom:auto;top:12px;} 
     
+    /* 3. 모바일에서 일정 영역은 바텀 시트로 변환 */
     .sidebar{
-      position:absolute; bottom:0; left:0; width:100%; height:75%;
+      position:absolute; bottom:0; left:0; width:100%; height:55%; /* 기본적으로 살짝 올라와 있음 */
       border-radius:24px 24px 0 0; border-top:1px solid rgba(0,0,0,0.1);
       box-shadow:0 -4px 24px rgba(0,0,0,.15);
       transition:transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-      transform:translateY(0); /* 기본 확장 상태 */
+      transform:translateY(0); 
       z-index:100;
     }
     .sidebar.collapsed{
-      transform:translateY(calc(100% - 66px)); /* 핸들과 탭 일부만 남기고 숨김 */
+      transform:translateY(calc(100% - 40px)); /* 내렸을 때 핸들(40px)만 보임 */
     }
     .sidebar-handle-wrap{
       display:flex; justify-content:center; align-items:center;
-      height:24px; padding-top:10px; padding-bottom:10px;
-      cursor:grab; touch-action:none;
+      height:40px; cursor:grab; touch-action:none;
     }
     .sidebar-handle{width:42px; height:5px; border-radius:3px; background:#C7C7CC;}
     .day-tabs{margin-top:0;}
-  }
-  @media (max-width:520px){
-    .board{flex-wrap:wrap;}
-    .trip-title-input{
-      position:static;
-      transform:none;
-      width:auto;
-      flex:1 1 100%;
-      text-align:left;
-      font-size:19px;
-      order:3;
-    }
-    .board-badge{order:1;}
-    .view-tag{order:2;}
-    .board-actions{order:4;margin-left:0;}
   }
 </style>
 </head>
@@ -721,9 +705,12 @@
 <!-- 카카오맵 API 로드 -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 
-<!-- 🔥 파이어베이스 추가 라이브러리 -->
+<!-- 🔥 파이어베이스 라이브러리 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- 🔥 솔리드 블록 드래그 애니메이션을 위한 SortableJS 라이브러리 추가 -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
 <script>
 (function(){
@@ -733,7 +720,7 @@
   // 🔥 파이어베이스 설정 및 초기화
   // =========================================================================
   var firebaseConfig = {
-    apiKey: "본인의_API_KEY", // <--- 실제 발급받은 키로 교체하세요!
+    apiKey: "AIzaSyBkO5Jmguuzn9WU8ABH9B2VHh_RL8Scd7k", // 본인의 키로 교체 필요
     authDomain: "trip-df7f2.firebaseapp.com",
     databaseURL: "https://trip-df7f2-default-rtdb.firebaseio.com",
     projectId: "trip-df7f2",
@@ -1059,7 +1046,7 @@
       
       g.stops.forEach(function(s, i){
         var isLast = i===g.stops.length-1;
-        html += '<li class="stop-item" draggable="true" data-id="'+s.id+'">';
+        html += '<li class="stop-item" data-id="'+s.id+'">';
         html += '<div class="stop-node" style="background:'+color+'">'+(i+1)+'</div>';
 
         if(!isLast){
@@ -1097,6 +1084,7 @@
     el.innerHTML = html;
 
     if(!state.viewMode){
+      // 삭제, 수정 버튼 연결
       Array.prototype.forEach.call(el.querySelectorAll('[data-remove]'), function(btn){
         btn.addEventListener('click', function(){
           var id = btn.getAttribute('data-remove');
@@ -1110,125 +1098,79 @@
         });
       });
 
-      // 🔥 실제 솔리드 블록처럼 움직이게 하는 드래그 앤 드롭 애니메이션
-      var dragSrcEl = null;
-      var dragClone = null;
-      var items = el.querySelectorAll('.stop-item');
+      // 🔥 SortableJS 솔리드 블럭 드래그 앤 드롭 연결
+      if (typeof Sortable !== 'undefined') {
+        var lists = el.querySelectorAll('.stop-list');
+        Array.prototype.forEach.call(lists, function(listEl) {
+          Sortable.create(listEl, {
+            group: 'shared', 
+            animation: 250,  // 부드러운 위치 교환 애니메이션
+            ghostClass: 'stop-item-ghost', // 드래그 시 원래 위치 반투명 처리
+            delay: 150, // 모바일에서 스크롤과 겹치지 않게 살짝 길게 터치 시 발동
+            delayOnTouchOnly: true,
+            onEnd: function(evt) {
+              var itemEl = evt.item;
+              var srcId = itemEl.getAttribute('data-id');
+              
+              var prevEl = itemEl.previousElementSibling;
+              var nextEl = itemEl.nextElementSibling;
+              var newDate, targetIdx;
+              
+              if(prevEl) {
+                var prevId = prevEl.getAttribute('data-id');
+                var prevIdx = state.stops.findIndex(function(s){ return s.id === prevId; });
+                newDate = state.stops[prevIdx].date;
+                targetIdx = prevIdx + 1;
+              } else if(nextEl) {
+                var nextId = nextEl.getAttribute('data-id');
+                var nextIdx = state.stops.findIndex(function(s){ return s.id === nextId; });
+                newDate = state.stops[nextIdx].date;
+                targetIdx = nextIdx;
+              } else {
+                return; // 에러 방지
+              }
 
-      Array.prototype.forEach.call(items, function(item) {
-        item.addEventListener('dragstart', function(e) {
-          // 버튼들을 드래그할 땐 드래그 취소
-          if(e.target.closest('.stop-remove') || e.target.closest('.stop-edit')) {
-            e.preventDefault(); return;
-          }
-          dragSrcEl = this;
-          e.dataTransfer.effectAllowed = 'move';
-          
-          // 오직 흰색 카드 부분만 클론하여 드래그 이미지로 설정
-          var cardEl = this.querySelector('.stop-card');
-          dragClone = cardEl.cloneNode(true);
-          dragClone.style.width = cardEl.offsetWidth + 'px';
-          dragClone.style.position = 'absolute';
-          dragClone.style.top = '-9999px';
-          dragClone.style.left = '-9999px';
-          dragClone.style.backgroundColor = 'var(--card)';
-          dragClone.style.opacity = '1';
-          dragClone.style.borderRadius = 'var(--radius-md)';
-          dragClone.style.boxShadow = '0 10px 30px rgba(0,0,0,0.15)'; 
-          
-          document.body.appendChild(dragClone);
-          
-          // 마우스 포인터 중심에 카드가 오도록 조정
-          e.dataTransfer.setDragImage(dragClone, cardEl.offsetWidth / 2, cardEl.offsetHeight / 2);
-          
-          setTimeout(function(){ dragSrcEl.classList.add('is-dragging'); }, 0);
-        });
+              var srcIdx = state.stops.findIndex(function(s){ return s.id === srcId; });
+              if(srcIdx < 0) return;
 
-        item.addEventListener('dragover', function(e) {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          var rect = this.getBoundingClientRect();
-          var mid = rect.top + rect.height/2;
-          
-          this.classList.remove('drag-over-top', 'drag-over-bottom');
-          if(e.clientY < mid) this.classList.add('drag-over-top');
-          else this.classList.add('drag-over-bottom');
-        });
+              var movedItem = state.stops.splice(srcIdx, 1)[0];
+              var oldDate = movedItem.date;
+              movedItem.date = newDate;
 
-        item.addEventListener('dragleave', function(e) {
-          this.classList.remove('drag-over-top', 'drag-over-bottom');
-        });
+              if (srcIdx < targetIdx) targetIdx--; 
+              
+              state.stops.splice(targetIdx, 0, movedItem);
+              sortStateStops();
+              
+              // 각 날짜의 1번째 장소는 교통수단 정보 삭제
+              var grps = groupByDay(state.stops);
+              grps.forEach(function(g){
+                if(g.stops.length > 0) {
+                  g.stops[0].transport = null;
+                  g.stops[0].transportMin = null;
+                }
+              });
 
-        item.addEventListener('dragend', function(e) {
-          if(dragSrcEl) dragSrcEl.classList.remove('is-dragging');
-          if(dragClone && dragClone.parentNode) dragClone.parentNode.removeChild(dragClone);
-          Array.prototype.forEach.call(items, function(i) {
-            i.classList.remove('drag-over-top', 'drag-over-bottom');
+              if (oldDate !== newDate) recomputeTimesForDate(oldDate);
+              recomputeTimesForDate(newDate);
+              
+              renderAll();
+              
+              // 2개 장소여도 위치를 바꾸면 올바르게 수정창(팝업)이 뜸
+              setTimeout(function(){
+                var stopsOnDate = getStopsOnDate(newDate);
+                var movedLocalIdx = stopsOnDate.findIndex(function(s){ return s.id === movedItem.id; });
+                if (movedLocalIdx === 0 && stopsOnDate.length > 1) {
+                  openEditStopModal(stopsOnDate[1].id);
+                } else {
+                  openEditStopModal(movedItem.id);
+                }
+              }, 300);
+            }
           });
         });
-
-        item.addEventListener('drop', function(e) {
-          e.stopPropagation();
-          this.classList.remove('drag-over-top', 'drag-over-bottom');
-          if (dragSrcEl !== this) {
-            var srcId = dragSrcEl.getAttribute('data-id');
-            var targetId = this.getAttribute('data-id');
-            var rect = this.getBoundingClientRect();
-            var insertAfter = e.clientY >= (rect.top + rect.height/2);
-            moveStopOrder(srcId, targetId, insertAfter);
-          }
-          return false;
-        });
-      });
+      }
     }
-  }
-
-  // 2개 장소 순서 변경 및 시간 재계산 버그 완벽 수정
-  function moveStopOrder(srcId, targetId, insertAfter) {
-    var srcIdx = state.stops.findIndex(function(s){ return s.id === srcId; });
-    var targetIdx = state.stops.findIndex(function(s){ return s.id === targetId; });
-    if(srcIdx < 0 || targetIdx < 0) return;
-
-    var item = state.stops.splice(srcIdx, 1)[0];
-    var oldDate = item.date;
-
-    targetIdx = state.stops.findIndex(function(s){ return s.id === targetId; });
-    var insertIdx = insertAfter ? targetIdx + 1 : targetIdx;
-    
-    var newDate = state.stops[targetIdx].date;
-    item.date = newDate;
-    
-    state.stops.splice(insertIdx, 0, item);
-    sortStateStops(); 
-    
-    // 순서가 바뀌었으므로 각 날짜의 1번째 장소는 교통수단 정보를 비워야 꼬이지 않음
-    var groups = groupByDay(state.stops);
-    groups.forEach(function(g){
-      if(g.stops.length > 0) {
-        g.stops[0].transport = null;
-        g.stops[0].transportMin = null;
-      }
-    });
-
-    if (oldDate !== newDate) recomputeTimesForDate(oldDate);
-    recomputeTimesForDate(newDate);
-    
-    renderAll();
-    
-    // 🔥 순서를 변경하면 방금 위치가 바뀐 요소들에 대해 
-    // "이전 장소로부터의 대중교통 시간"을 다시 설정하도록 모달을 강제 팝업
-    setTimeout(function(){
-      var stopsOnDate = getStopsOnDate(newDate);
-      var movedIdx = stopsOnDate.findIndex(function(s){ return s.id === srcId; });
-      
-      if (movedIdx === 0 && stopsOnDate.length > 1) {
-        // 1번 자리로 새 장소가 올라왔다면, 기존 1번(지금 2번이 됨)의 교통수단을 새로 골라야 함
-        openEditStopModal(stopsOnDate[1].id);
-      } else {
-        // 다른 곳으로 끼어들었다면 그 장소(srcId)의 교통수단을 골라야 함
-        openEditStopModal(srcId);
-      }
-    }, 300);
   }
 
   function escapeHtml(str){
@@ -1289,7 +1231,7 @@
       if(window.innerWidth > 860) return;
       startY = e.touches[0].clientY;
       isDraggingSheet = true;
-      sidebar.style.transition = 'none'; // 드래그 중엔 애니메이션 끄기
+      sidebar.style.transition = 'none'; 
   }, {passive: true});
 
   handle.addEventListener('touchmove', function(e){
@@ -1297,7 +1239,7 @@
       var deltaY = e.touches[0].clientY - startY;
       var isCollapsed = sidebar.classList.contains('collapsed');
       
-      var maxCollapse = window.innerHeight * 0.75 - 66;
+      var maxCollapse = sidebar.offsetHeight - 40; 
       var baseTranslate = isCollapsed ? maxCollapse : 0;
       var newTranslate = baseTranslate + deltaY;
       
@@ -1316,14 +1258,13 @@
       var match = transformStr.match(/translateY\((.*)px\)/);
       if(match) {
           var currentTranslate = parseFloat(match[1]);
-          var maxCollapse = window.innerHeight * 0.75 - 66;
-          // 절반 이상 내리면 닫히고, 아니면 열림
-          if(currentTranslate > maxCollapse / 2) {
+          var maxCollapse = sidebar.offsetHeight - 40;
+          if(currentTranslate > maxCollapse / 3) { 
               sidebar.classList.add('collapsed');
           } else {
               sidebar.classList.remove('collapsed');
           }
-          sidebar.style.transform = ''; // 인라인 스타일 제거 (CSS 클래스에 맡김)
+          sidebar.style.transform = ''; 
       }
   });
   
@@ -1331,7 +1272,6 @@
       if(window.innerWidth > 860) return;
       sidebar.classList.toggle('collapsed');
   });
-
 
   // ---------- 스토리보드(공유 일정 재생) 모드 ----------
   function getStoryboardSteps(){
@@ -1822,8 +1762,6 @@
     for(var i = 1; i < stopsOnDate.length; i++){
       var prev = stopsOnDate[i-1];
       var s = stopsOnDate[i];
-      if(!s.transport) continue; 
-      
       if(s.transportMin != null){
         var departure = addMinutes(prev.time, prev.duration);
         s.time = addMinutes(departure, s.transportMin);
