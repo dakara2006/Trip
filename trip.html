@@ -507,7 +507,7 @@
     padding:12px;border-radius:var(--radius-md);font-weight:700;font-size:13.5px;
   }
 
-  /* ===== Day Transition Overlay ===== */
+  /* ===== Day Transition Overlay (Intro/Outro) ===== */
   .day-transition-overlay{
     position:fixed;inset:0;background:rgba(28,28,30,.85);
     z-index:9999;display:flex;align-items:center;justify-content:center;
@@ -517,12 +517,18 @@
   .day-transition-overlay.show{opacity:1;pointer-events:auto;}
   .day-transition-text{
     font-size:42px;font-weight:800;color:#fff;letter-spacing:0.05em;
-    transform:translateY(20px) scale(0.95);transition:all 0.6s cubic-bezier(0.22,1,0.36,1);
+    transform:translateY(20px) scale(0.95);
+    transition:transform 0.6s cubic-bezier(0.22,1,0.36,1), opacity 0.3s;
     text-shadow:0 4px 20px rgba(0,0,0,.5);
+    text-align:center; word-break:keep-all;
   }
   .day-transition-overlay.show .day-transition-text{transform:translateY(0) scale(1);}
+  
+  /* 타자기 커서 효과 */
+  .type-cursor { font-weight: 300; opacity: 1; animation: blink 0.8s step-end infinite; margin-left: 2px;}
+  @keyframes blink { 50% { opacity: 0; } }
 
-  /* ===== Recent Trips ===== */
+  /* ===== Recent Trips (iOS Card Style) ===== */
   .recent{margin-top:24px;}
   .recent h4{font-size:13px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.02em;margin:0 0 12px;font-weight:700;}
   .recent-item{
@@ -584,7 +590,7 @@
     .trip-title-input { position: static; transform: none; width: 100%; font-size: 18px; text-align: center; }
 
     .layout{display:block; position:relative; height:calc(100vh - 58px); overflow:hidden;}
-    /* 🔥 지도가 항상 화면 전체 높이(100%)를 채우도록 설정 */
+    /* 지도가 모바일에서 화면 전체 높이(100%)를 덮도록 수정 */
     .map-wrap{position:absolute; inset:0; height:100%; z-index:1; width:100%;} 
     .legend{left:12px;right:12px;bottom:auto;top:12px;} 
     
@@ -710,13 +716,13 @@
 
 <!-- 뷰 모드 날짜 전환 애니메이션용 오버레이 -->
 <div id="dayTransitionOverlay" class="day-transition-overlay">
-  <div id="dayTransitionText" class="day-transition-text">1일차</div>
+  <div id="dayTransitionText" class="day-transition-text"></div>
 </div>
 
 <!-- 카카오맵 API 로드 -->
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=2228a3c639c856b1a16a015bc0cbf91e&libraries=services"></script>
 
-<!-- 파이어베이스 추가 라이브러리 -->
+<!-- 파이어베이스 라이브러리 -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -766,6 +772,7 @@
     viewMode: false,
     currentStep: 0,
     lastStoryboardDay: -1,
+    isPlayingIntro: false, // 🔥 인트로 재생 중 상태 관리
     selectedPlace: null,
     selectedTransport: null,
     pendingPick: false,
@@ -842,7 +849,7 @@
   }
   function dayColor(idx){ return DAY_COLORS[idx % DAY_COLORS.length]; }
 
-  // 🔥 마커를 가시 영역 중앙(위쪽)에 맞추기 위한 Offset 계산 함수
+  // 🔥 마커를 가시 영역 중앙(위쪽)에 맞추기 위한 Offset 패딩 계산 함수
   function getOffsetCenter(coords) {
     if (window.innerWidth <= 860) {
       var sidebar = document.getElementById('mobileSidebar');
@@ -851,7 +858,7 @@
         if(proj) {
           var point = proj.pointFromCoords(coords);
           var mapHeight = document.getElementById('map').offsetHeight;
-          // 중심을 화면의 약 25% 만큼 아래로 당겨서, 실제 마커는 위쪽 빈 공간에 보이게 처리
+          // 중심을 화면의 약간 아래로 당겨서 마커가 패널에 가리지 않게 위쪽 빈 공간에 보이도록 처리
           point.y += (mapHeight * 0.25); 
           return proj.coordsFromPoint(point);
         }
@@ -928,6 +935,7 @@
     state.tempMarker = new kakao.maps.Marker({ position: coords });
     state.tempMarker.setMap(map);
     
+    // 오프셋 적용된 위치로 panTo
     var centerCoords = getOffsetCenter(coords);
     map.panTo(centerCoords);
   }
@@ -1006,7 +1014,8 @@
     });
 
     if(hasStops && !state.viewMode){
-      // 🔥 바텀시트가 올라와 있을 때 지도 하단 패딩을 여유있게 주어 가려지지 않게 처리
+      // 모바일에서 하단 패널이 올라와 있을 때 지도 하단 패딩을 여유있게 주어 
+      // 모든 마커가 화면 윗쪽(가시 영역)에 위치하도록 bounds 조정
       var pb = 50;
       if(window.innerWidth <= 860 && !document.getElementById('mobileSidebar').classList.contains('collapsed')) {
         pb = document.getElementById('map').offsetHeight * 0.55 + 20;
@@ -1241,10 +1250,17 @@
       document.getElementById('dayTabs').style.display = 'none';
       document.getElementById('timeline').style.display = 'none';
       document.getElementById('storyboard').style.display = 'flex';
-      if(state.stops.length){
-        renderStoryboard(false, true); 
+      
+      // 인트로 재생 중이 아니라면 바로 스토리보드를 그리고 맵을 이동시킵니다
+      if(!state.isPlayingIntro) {
+        if(state.stops.length){
+          renderStoryboard(false, true); 
+        } else {
+          document.getElementById('storyboard').innerHTML = '<div class="empty-state">표시할 장소가 없어요.</div>';
+          renderMap();
+        }
       } else {
-        document.getElementById('storyboard').innerHTML = '<div class="empty-state">표시할 장소가 없어요.</div>';
+        // 인트로 재생 중엔 맵의 마커만 일단 조용히 그려둡니다 (화면은 검은색 덮개로 가려짐)
         renderMap();
       }
     } else {
@@ -1302,22 +1318,70 @@
           }
           sidebar.style.transform = ''; 
       }
+      // 시트가 열리거나 닫힌 후 지도의 오프셋을 재계산하기 위해 맵 다시 그리기
+      setTimeout(renderAll, 300);
   });
   
   handle.addEventListener('click', function(){
       if(window.innerWidth > 860) return;
       sidebar.classList.toggle('collapsed');
+      setTimeout(renderAll, 300);
   });
 
-  // ---------- 스토리보드(공유 일정 재생) 모드 ----------
+  // ---------- 스토리보드(공유 일정 재생) 모드 및 시네마틱 인트로 ----------
   function getStoryboardSteps(){
     return sortStateStops();
+  }
+
+  // 🔥 보기 모드 진입 시 타이핑 효과 오프닝 애니메이션
+  function playIntroTransition(titleText, onDone) {
+    var ov = document.getElementById('dayTransitionOverlay');
+    var txt = document.getElementById('dayTransitionText');
+    
+    if(transitionTimer) clearTimeout(transitionTimer);
+    
+    ov.classList.add('show');
+    txt.style.opacity = '1';
+    txt.innerHTML = '<span class="type-cursor">|</span>';
+
+    var i = 0;
+    function typeWriter() {
+      if (i < titleText.length) {
+        txt.innerHTML = escapeHtml(titleText.substring(0, i+1)) + '<span class="type-cursor">|</span>';
+        i++;
+        setTimeout(typeWriter, 120); 
+      } else {
+        setTimeout(function() {
+          txt.style.opacity = '0';
+          
+          setTimeout(function() {
+            if(state.stops.length > 0) {
+              txt.innerHTML = '1일차';
+            } else {
+              txt.innerHTML = '일정 없음';
+            }
+            txt.style.opacity = '1';
+            
+            setTimeout(function() {
+              ov.classList.remove('show');
+              setTimeout(function(){
+                txt.style.opacity = ''; 
+                if(onDone) onDone();
+              }, 600);
+            }, 1500);
+
+          }, 400); 
+        }, 800); 
+      }
+    }
+    setTimeout(typeWriter, 300);
   }
 
   function playDayTransition(dayNum) {
     var ov = document.getElementById('dayTransitionOverlay');
     var txt = document.getElementById('dayTransitionText');
     txt.textContent = dayNum + '일차';
+    txt.style.opacity = '1';
     
     ov.classList.add('show');
     if(transitionTimer) clearTimeout(transitionTimer);
@@ -1341,7 +1405,8 @@
     steps.forEach(function(s){ if(uniqueDates.indexOf(s.date) === -1) uniqueDates.push(s.date); });
     var currentDayNum = uniqueDates.indexOf(current.date) + 1;
 
-    if(checkTransition && state.lastStoryboardDay !== currentDayNum) {
+    // 인트로 중이 아닐 때만 일반 일차 전환 애니메이션 실행
+    if(checkTransition && state.lastStoryboardDay !== currentDayNum && !state.isPlayingIntro) {
       state.lastStoryboardDay = currentDayNum;
       playDayTransition(currentDayNum);
     }
@@ -1391,7 +1456,7 @@
 
     if(map && current){
       var coords = new kakao.maps.LatLng(current.lat, current.lng);
-      var centerCoords = getOffsetCenter(coords);
+      var centerCoords = getOffsetCenter(coords); // 오프셋 적용
       if(animate){
         animateMapTravel(centerCoords, 600, function(){
           map.setLevel(4, { animate: true });
@@ -2006,6 +2071,7 @@
     if(prefill) setTimeout(function(){ document.getElementById('doLoad').click(); }, 50);
   }
 
+  // 🔥 공유 코드 불러오기 시 인트로(타이핑 애니메이션) 시작점
   function applyLoadedTrip(raw, code){
     try{
       var data = JSON.parse(raw);
@@ -2015,12 +2081,23 @@
       state.currentStep = 0;
       state.activeDay = 'all';
       state.lastStoryboardDay = -1; 
+      state.isPlayingIntro = true; // 인트로 재생 플래그 ON
       
       document.getElementById('viewTag').style.display='inline-block';
       document.getElementById('viewTag').textContent = '보기 모드 · '+code;
       document.getElementById('tripTitle').readOnly = true;
       document.getElementById('addForm').style.display='none';
+      
+      // 인트로 중에는 화면에 마커만 그리고 스토리보드 UI는 띄우지 않음
       renderAll();
+
+      // 인트로 애니메이션 실행 후 끝날 때 콜백으로 플래그 OFF 및 정상 렌더링
+      playIntroTransition(state.title, function() {
+        state.isPlayingIntro = false;
+        state.lastStoryboardDay = 1; // 1일차 애니메이션은 방금 봤으므로 스킵
+        renderAll();
+      });
+
     }catch(e){
       alert('일정 데이터를 읽는 중 문제가 발생했어요.');
     }
